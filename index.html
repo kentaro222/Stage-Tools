@@ -21,6 +21,9 @@
             --error-text: #e57373;
             --error-border: #c62828;
             --ring: 0 0 0 2px rgba(0, 123, 255, 0.4);
+            /* 電卓用カラー */
+            --calc-op: #e65100;
+            --calc-clear: #c62828;
         }
 
         @media (prefers-color-scheme: light) {
@@ -39,6 +42,9 @@
                 --error-bg: #f8d7da;
                 --error-text: #721c24;
                 --error-border: #f5c6cb;
+                /* 電卓用カラー */
+                --calc-op: #ff9800;
+                --calc-clear: #f44336;
             }
         }
 
@@ -138,12 +144,53 @@
         button.action-btn:hover { background-color: var(--accent-hover); }
         
         /* Status Box for Baton Queue */
-        .status-box {
-            padding: 12px; margin-bottom: 16px; border-radius: 8px; text-align: center; font-weight: bold; transition: all 0.3s;
-        }
+        .status-box { padding: 12px; margin-bottom: 16px; border-radius: 8px; text-align: center; font-weight: bold; transition: all 0.3s; }
         .status-ok { background: var(--success-bg); color: var(--success-text); border: 1px solid var(--success-border); }
         .status-error { background: var(--error-bg); color: var(--error-text); border: 1px solid var(--error-border); }
         .highlight-input { border: 2px solid var(--error-border) !important; }
+
+        /* シンプル電卓専用スタイル */
+        .calc-wrapper {
+            max-width: 320px; margin: 0 auto;
+            background: var(--input-bg); border-radius: 12px;
+            border: 1px solid var(--border); padding: 20px;
+        }
+        .calc-display {
+            background: #111; color: #fff; text-align: right;
+            padding: 15px; font-size: 2rem; border-radius: 8px;
+            margin-bottom: 15px; overflow-x: auto; white-space: nowrap;
+        }
+        .calc-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .calc-btn {
+            padding: 15px 0; font-size: 1.2rem; border: none; border-radius: 8px;
+            background: var(--surface); color: var(--text); border: 1px solid var(--border);
+            cursor: pointer; transition: opacity 0.1s;
+        }
+        .calc-btn:active { opacity: 0.7; }
+        .calc-btn.op { background: var(--calc-op); color: white; border-color: var(--calc-op); }
+        .calc-btn.eq { background: var(--accent); color: white; border-color: var(--accent); }
+        .calc-btn.clear { background: var(--calc-clear); color: white; border-color: var(--calc-clear); }
+        .calc-btn.span-2 { grid-column: span 2; }
+        .calc-btn.span-2-row { grid-row: span 2; }
+        
+        .calc-history-container {
+            max-width: 320px; margin: 20px auto 0; padding: 20px;
+            background: var(--input-bg); border-radius: 12px; border: 1px solid var(--border);
+        }
+        .calc-history-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 10px; border-bottom: 2px solid var(--bg); padding-bottom: 10px;
+        }
+        .calc-history-header h3 { margin: 0; font-size: 1.1rem; }
+        .calc-history-clear {
+            padding: 6px 12px; font-size: 0.9rem; background: var(--muted);
+            color: white; border: none; border-radius: 6px; cursor: pointer;
+        }
+        .calc-history-list {
+            max-height: 180px; overflow-y: auto; text-align: right; font-size: 1.1rem; color: var(--text);
+            user-select: text; -webkit-user-select: text;
+        }
+        .calc-history-item { padding: 8px 0; border-bottom: 1px dashed var(--border); }
     </style>
 </head>
 <body>
@@ -154,6 +201,7 @@
         <button class="tab-btn" data-target="tab-calc-shaku">長さ加減算</button>
         <button class="tab-btn" data-target="tab-baton-queue">バトン動作計算</button>
         <button class="tab-btn" data-target="tab-baton-speed">バトン速度変換</button>
+        <button class="tab-btn" data-target="tab-calculator">シンプル電卓</button>
     </div>
 
     <div id="tab-mm-shaku" class="tab-panel active">
@@ -300,6 +348,44 @@
             <button class="action-btn" id="bs_resetBtn" style="width: auto; background: transparent; color: var(--text); border: 1px solid var(--border);">入力をクリア</button>
         </div>
         <p class="hint" style="margin-top: 16px;">速度 = 1500 × (ダイヤル% / 100) <br>端数処理: 速度は四捨五入、ダイヤル%は小数第1位</p>
+    </div>
+
+    <div id="tab-calculator" class="tab-panel">
+        <h1>シンプル電卓</h1>
+        <div class="calc-wrapper">
+            <div class="calc-display" id="c_display">0</div>
+            <div class="calc-keys" id="c_keys">
+                <button type="button" class="calc-btn clear span-2" data-action="clear">C</button>
+                <button type="button" class="calc-btn op" data-action="operator" data-value="/">÷</button>
+                <button type="button" class="calc-btn op" data-action="operator" data-value="*">×</button>
+                
+                <button type="button" class="calc-btn" data-action="digit" data-value="7">7</button>
+                <button type="button" class="calc-btn" data-action="digit" data-value="8">8</button>
+                <button type="button" class="calc-btn" data-action="digit" data-value="9">9</button>
+                <button type="button" class="calc-btn op" data-action="operator" data-value="-">-</button>
+                
+                <button type="button" class="calc-btn" data-action="digit" data-value="4">4</button>
+                <button type="button" class="calc-btn" data-action="digit" data-value="5">5</button>
+                <button type="button" class="calc-btn" data-action="digit" data-value="6">6</button>
+                <button type="button" class="calc-btn op" data-action="operator" data-value="+">+</button>
+                
+                <button type="button" class="calc-btn" data-action="digit" data-value="1">1</button>
+                <button type="button" class="calc-btn" data-action="digit" data-value="2">2</button>
+                <button type="button" class="calc-btn" data-action="digit" data-value="3">3</button>
+                <button type="button" class="calc-btn eq span-2-row" data-action="equal">=</button>
+                
+                <button type="button" class="calc-btn span-2" data-action="digit" data-value="0">0</button>
+                <button type="button" class="calc-btn" data-action="decimal">.</button>
+            </div>
+        </div>
+
+        <div class="calc-history-container">
+            <div class="calc-history-header">
+                <h3>計算履歴</h3>
+                <button type="button" class="calc-history-clear" id="c_history_clear">履歴を消去</button>
+            </div>
+            <div class="calc-history-list" id="c_history_list"></div>
+        </div>
     </div>
 </div>
 
@@ -480,7 +566,7 @@
         [elDist, elAcc, elDec].forEach(el => el.addEventListener('input', triggerErrorState));
         elSpeed.addEventListener('change', () => document.getElementById('bq_btnSpeed').click());
         elTime.addEventListener('change', () => document.getElementById('bq_btnTime').click());
-        document.getElementById('bq_btnSpeed').click(); // Initial
+        document.getElementById('bq_btnSpeed').click();
     })();
 
     // --- 4. バトン速度変換ツール ロジック ---
@@ -521,8 +607,109 @@
             percent.value = ''; speed.value = ''; out.textContent = '数値を入力すると自動計算されます'; percent.focus();
         });
     })();
+
+    // --- 5. シンプル電卓 ロジック ---
+    (() => {
+        let displayValue = '0', firstOperand = null, waitingForSecondOperand = false, currentOperator = null;
+        const display = document.getElementById('c_display');
+        const historyList = document.getElementById('c_history_list');
+        const keysContainer = document.getElementById('c_keys');
+        const calcTab = document.getElementById('tab-calculator');
+
+        function updateDisplay() { display.innerText = displayValue; }
+
+        function inputDigit(digit) {
+            if (waitingForSecondOperand) { displayValue = digit; waitingForSecondOperand = false; } 
+            else { displayValue = displayValue === '0' ? digit : displayValue + digit; }
+            updateDisplay();
+        }
+
+        function inputDecimal() {
+            if (waitingForSecondOperand) { displayValue = '0.'; waitingForSecondOperand = false; updateDisplay(); return; }
+            if (!displayValue.includes('.')) { displayValue += '.'; }
+            updateDisplay();
+        }
+
+        function handleOperator(nextOperator) {
+            const inputValue = parseFloat(displayValue);
+            if (currentOperator && waitingForSecondOperand) { currentOperator = nextOperator; return; }
+            if (firstOperand == null && !isNaN(inputValue)) { firstOperand = inputValue; } 
+            else if (currentOperator) {
+                const result = calculate(firstOperand, inputValue, currentOperator);
+                addHistory(firstOperand, currentOperator, inputValue, result);
+                displayValue = `${parseFloat(result.toFixed(10))}`;
+                firstOperand = result;
+            }
+            waitingForSecondOperand = true;
+            currentOperator = nextOperator;
+            updateDisplay();
+        }
+
+        function calculate(first, second, operator) {
+            if (operator === '+') return first + second;
+            if (operator === '-') return first - second;
+            if (operator === '*') return first * second;
+            if (operator === '/') return second !== 0 ? first / second : 0;
+            return second;
+        }
+
+        function handleEqual() {
+            if (currentOperator == null || waitingForSecondOperand) return;
+            const inputValue = parseFloat(displayValue);
+            const result = calculate(firstOperand, inputValue, currentOperator);
+            addHistory(firstOperand, currentOperator, inputValue, result);
+            displayValue = `${parseFloat(result.toFixed(10))}`;
+            firstOperand = null; currentOperator = null; waitingForSecondOperand = true;
+            updateDisplay();
+        }
+
+        function clearCalculator() {
+            displayValue = '0'; firstOperand = null; waitingForSecondOperand = false; currentOperator = null;
+            updateDisplay();
+        }
+
+        function addHistory(first, operator, second, result) {
+            const opSymbol = operator === '*' ? '×' : operator === '/' ? '÷' : operator;
+            const item = document.createElement('div');
+            item.className = 'calc-history-item';
+            item.innerText = `${first} ${opSymbol} ${second} = ${parseFloat(result.toFixed(10))}`;
+            historyList.prepend(item);
+        }
+
+        // クリックイベントの委譲
+        keysContainer.addEventListener('click', (e) => {
+            if (!e.target.matches('button')) return;
+            const action = e.target.dataset.action;
+            const value = e.target.dataset.value;
+
+            if (action === 'digit') inputDigit(value);
+            if (action === 'operator') handleOperator(value);
+            if (action === 'decimal') inputDecimal();
+            if (action === 'clear') clearCalculator();
+            if (action === 'equal') handleEqual();
+            
+            e.target.blur(); // Focusが残ってEnter連打されるのを防ぐ
+        });
+
+        document.getElementById('c_history_clear').addEventListener('click', () => {
+            historyList.innerHTML = '';
+        });
+
+        // キーボード入力サポート（電卓タブが開いている時のみ有効化）
+        document.addEventListener('keydown', (event) => {
+            // 他のタブが開かれている時、または他のinput等にフォーカスがある時は無効化
+            if (!calcTab.classList.contains('active')) return;
+            if (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') return;
+
+            const key = event.key;
+            if (/\d/.test(key)) inputDigit(key);
+            else if (['+', '-', '*', '/'].includes(key)) handleOperator(key);
+            else if (key === 'Enter' || key === '=') { event.preventDefault(); handleEqual(); }
+            else if (key === '.') inputDecimal();
+            else if (key === 'Escape' || key === 'Delete' || key === 'Backspace') clearCalculator();
+        });
+    })();
 </script>
 
 </body>
-
 </html>

@@ -143,7 +143,7 @@
         }
         button.action-btn:hover { background-color: var(--accent-hover); }
         
-        /* Status Box for Baton Queue */
+        /* Status Box for Logic Messages */
         .status-box { padding: 12px; margin-bottom: 16px; border-radius: 8px; text-align: center; font-weight: bold; transition: all 0.3s; }
         .status-ok { background: var(--success-bg); color: var(--success-text); border: 1px solid var(--success-border); }
         .status-error { background: var(--error-bg); color: var(--error-text); border: 1px solid var(--error-border); }
@@ -197,9 +197,10 @@
 
 <div class="container">
     <div class="tabs">
-        <button class="tab-btn active" data-target="tab-mm-shaku">mm ↔ 尺・間 変換</button>
+        <button class="tab-btn active" data-target="tab-mm-shaku">mm ↔ 尺・間</button>
         <button class="tab-btn" data-target="tab-calc-shaku">長さ加減算</button>
         <button class="tab-btn" data-target="tab-baton-queue">バトン動作計算</button>
+        <button class="tab-btn" data-target="tab-baton-dist">バトン距離計算(逆算)</button>
         <button class="tab-btn" data-target="tab-baton-speed">バトン速度変換</button>
         <button class="tab-btn" data-target="tab-calculator">シンプル電卓</button>
     </div>
@@ -312,6 +313,46 @@
                 <label>動作時間 (Time)</label>
                 <div class="input-group"><input type="number" id="bq_time" placeholder="-" step="0.1" min="0"><span class="unit">秒</span></div>
                 <button class="action-btn" id="bq_btnTime">この時間で計算</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-baton-dist" class="tab-panel">
+        <h1>バトン距離計算機（逆算版）</h1>
+        <div id="bd_status" class="status-box status-ok">計算完了</div>
+        
+        <div class="row">
+            <div>
+                <label>設定速度 (V)</label>
+                <div class="input-group"><input type="number" id="bd_speed" value="750" step="10"><span class="unit">mm/s</span></div>
+                <div class="hint">最大1500mm/s</div>
+            </div>
+            <div>
+                <label>動作時間 (T)</label>
+                <div class="input-group"><input type="number" id="bd_time" value="5.0" step="0.1"><span class="unit">秒</span></div>
+                <div class="hint">キューのきっかけから停止まで</div>
+            </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--border); margin: 20px 0;">
+
+        <div class="row">
+            <div>
+                <label>加速時間 (Acc)</label>
+                <div class="input-group"><input type="number" id="bd_acc" value="1.0" step="0.1"><span class="unit">秒</span></div>
+                <div class="hint">限界: 1500mm/s到達に最短2秒</div>
+            </div>
+            <div>
+                <label>減速時間 (Dec)</label>
+                <div class="input-group"><input type="number" id="bd_dec" value="1.0" step="0.1"><span class="unit">秒</span></div>
+                <div class="hint">限界: 1500mm/sから最短2秒</div>
+            </div>
+        </div>
+
+        <div class="result-box" style="text-align: center; margin-top: 24px;">
+            <div class="muted-text" style="margin-bottom: 8px;">計算される移動距離</div>
+            <div style="font-size: 2.2rem; font-weight: bold; color: var(--accent);">
+                <span id="bd_dist-result">-</span> <span style="font-size: 1rem; color: var(--text);">mm</span>
             </div>
         </div>
     </div>
@@ -569,7 +610,50 @@
         document.getElementById('bq_btnSpeed').click();
     })();
 
-    // --- 4. バトン速度変換ツール ロジック ---
+    // --- 4. バトン距離計算機（逆算版） ロジック ---
+    (() => {
+        const speedEl = document.getElementById('bd_speed');
+        const accEl = document.getElementById('bd_acc');
+        const decEl = document.getElementById('bd_dec');
+        const timeEl = document.getElementById('bd_time');
+        const resultEl = document.getElementById('bd_dist-result');
+        const statusEl = document.getElementById('bd_status');
+
+        function showError(msg) {
+            resultEl.innerText = "---";
+            statusEl.innerHTML = "⚠ " + msg;
+            statusEl.className = "status-box status-error";
+        }
+
+        function calculate() {
+            const V = parseFloat(speedEl.value) || 0;
+            const Acc = parseFloat(accEl.value) || 0;
+            const Dec = parseFloat(decEl.value) || 0;
+            const T = parseFloat(timeEl.value) || 0;
+
+            const maxAccRate = 1500 / 2; // 750
+            const minAccTime = V / maxAccRate;
+            const minDecTime = V / maxAccRate;
+
+            if (V > 1500) { showError("速度が最大能力(1500mm/s)を超過しています"); return; }
+            if (Acc < minAccTime - 0.001 || Dec < minDecTime - 0.001) { showError("加減速が急すぎます（限界: 1500mm/sに最短2秒）"); return; }
+            if (T < (Acc + Dec)) { showError("設定時間内に指定の加減速を完了できません"); return; }
+
+            const dist = V * (T - (Acc + Dec) / 2);
+            if (dist < 0) {
+                showError("計算結果が不正です（時間が不足しています）");
+            } else {
+                resultEl.innerText = Math.round(dist);
+                statusEl.innerText = "計算完了";
+                statusEl.className = "status-box status-ok";
+            }
+        }
+
+        [speedEl, accEl, decEl, timeEl].forEach(el => el.addEventListener('input', calculate));
+        calculate(); // 初期計算
+    })();
+
+    // --- 5. バトン速度変換ツール ロジック ---
     (() => {
         const MAX_SPEED = 1500;
         const percent = document.getElementById('bs_percent'), speed = document.getElementById('bs_speed');
@@ -608,7 +692,7 @@
         });
     })();
 
-    // --- 5. シンプル電卓 ロジック ---
+    // --- 6. シンプル電卓 ロジック ---
     (() => {
         let displayValue = '0', firstOperand = null, waitingForSecondOperand = false, currentOperator = null;
         const display = document.getElementById('c_display');
@@ -697,7 +781,6 @@
 
         // キーボード入力サポート（電卓タブが開いている時のみ有効化）
         document.addEventListener('keydown', (event) => {
-            // 他のタブが開かれている時、または他のinput等にフォーカスがある時は無効化
             if (!calcTab.classList.contains('active')) return;
             if (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') return;
 

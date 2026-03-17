@@ -1,9 +1,12 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#121212">
+    <link rel="apple-touch-icon" href="ST-icon-192.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>舞台機構・寸法 計算ツール集</title>
+    <title>Stage Tools</title>
     <style>
         :root {
             --bg: #121212;
@@ -793,6 +796,17 @@
         });
     })();
 </script>
-
+ // --- PWA Service Worker の登録 ---
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+            .then(registration => {
+                console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            })
+            .catch(err => {
+                console.log('ServiceWorker registration failed: ', err);
+            });
+        });
+    }
 </body>
 </html>

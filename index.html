@@ -795,8 +795,7 @@
             else if (key === 'Escape' || key === 'Delete' || key === 'Backspace') clearCalculator();
         });
     })();
-</script>
- // --- PWA Service Worker の登録 ---
+    // --- PWA Service Worker の登録 ---
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('./sw.js')
@@ -808,5 +807,6 @@
             });
         });
     }
+</script>
 </body>
 </html>

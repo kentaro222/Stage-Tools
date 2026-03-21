@@ -434,16 +434,34 @@
 </div>
 
 <script>
-    // --- タブ切り替え処理 ---
-    document.querySelectorAll('.tab-btn').forEach(btn => {
+// --- タブ切り替え処理 ---
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabPanels = document.querySelectorAll('.tab-panel');
+    
+    // 1. 前回開いていたタブを復元
+    const savedTab = localStorage.getItem('st_activeTab');
+    if (savedTab) {
+        const targetBtn = document.querySelector(`.tab-btn[data-target="${savedTab}"]`);
+        if (targetBtn) {
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabPanels.forEach(p => p.classList.remove('active'));
+            targetBtn.classList.add('active');
+            document.getElementById(savedTab).classList.add('active');
+        }
+    }
+
+    // 2. タブ切り替えイベント（切り替え時に保存）
+    tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabPanels.forEach(p => p.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById(btn.dataset.target).classList.add('active');
+            
+            // 開いたタブのIDをローカルストレージに保存
+            localStorage.setItem('st_activeTab', btn.dataset.target);
         });
     });
-
     // --- 1. mm ↔ 尺・間 変換ツール ロジック ---
     (() => {
         const MM_PER_SHAKU = 1000 * (10/33);
@@ -695,13 +713,42 @@
         });
     })();
 
-    // --- 6. シンプル電卓 ロジック ---
+// --- 6. シンプル電卓 ロジック ---
     (() => {
         let displayValue = '0', firstOperand = null, waitingForSecondOperand = false, currentOperator = null;
         const display = document.getElementById('c_display');
         const historyList = document.getElementById('c_history_list');
         const keysContainer = document.getElementById('c_keys');
         const calcTab = document.getElementById('tab-calculator');
+
+        // --- 履歴のローカルストレージ管理 ---
+        let calcHistory = JSON.parse(localStorage.getItem('st_calcHistory')) || [];
+
+        function renderHistory() {
+            historyList.innerHTML = '';
+            calcHistory.forEach(text => {
+                const item = document.createElement('div');
+                item.className = 'calc-history-item';
+                item.innerText = text;
+                historyList.appendChild(item);
+            });
+        }
+        renderHistory(); // 初期描画
+
+        function addHistory(first, operator, second, result) {
+            const opSymbol = operator === '*' ? '×' : operator === '/' ? '÷' : operator;
+            const text = `${first} ${opSymbol} ${second} = ${parseFloat(result.toFixed(10))}`;
+            
+            // 最新の履歴を配列の先頭に追加
+            calcHistory.unshift(text);
+            // 履歴が50件を超えたら古いものを削除
+            if (calcHistory.length > 50) calcHistory.pop();
+            
+            // ローカルストレージに保存して再描画
+            localStorage.setItem('st_calcHistory', JSON.stringify(calcHistory));
+            renderHistory();
+        }
+        // -----------------------------------
 
         function updateDisplay() { display.innerText = displayValue; }
 
@@ -755,14 +802,6 @@
             updateDisplay();
         }
 
-        function addHistory(first, operator, second, result) {
-            const opSymbol = operator === '*' ? '×' : operator === '/' ? '÷' : operator;
-            const item = document.createElement('div');
-            item.className = 'calc-history-item';
-            item.innerText = `${first} ${opSymbol} ${second} = ${parseFloat(result.toFixed(10))}`;
-            historyList.prepend(item);
-        }
-
         // クリックイベントの委譲
         keysContainer.addEventListener('click', (e) => {
             if (!e.target.matches('button')) return;
@@ -778,8 +817,11 @@
             e.target.blur(); // Focusが残ってEnter連打されるのを防ぐ
         });
 
+        // 履歴の消去ボタン処理
         document.getElementById('c_history_clear').addEventListener('click', () => {
-            historyList.innerHTML = '';
+            calcHistory = []; // 配列を空に
+            localStorage.removeItem('st_calcHistory'); // ストレージから削除
+            renderHistory(); // 画面を更新
         });
 
         // キーボード入力サポート（電卓タブが開いている時のみ有効化）

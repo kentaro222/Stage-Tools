@@ -27,6 +27,10 @@
             /* 電卓用カラー */
             --calc-op: #e65100;
             --calc-clear: #c62828;
+            /* Wake Lock カラー */
+            --wl-active-bg: #332b00;
+            --wl-active-text: #ffeb3b;
+            --wl-active-border: #fbc02d;
         }
 
         @media (prefers-color-scheme: light) {
@@ -48,6 +52,10 @@
                 /* 電卓用カラー */
                 --calc-op: #ff9800;
                 --calc-clear: #f44336;
+                /* Wake Lock カラー */
+                --wl-active-bg: #fffde7;
+                --wl-active-text: #f57f17;
+                --wl-active-border: #fff59d;
             }
         }
 
@@ -72,6 +80,7 @@
             flex-wrap: wrap;
             gap: 8px;
             margin-bottom: 20px;
+            align-items: center; /* タブとボタンの縦位置を揃える */
         }
         .tab-btn {
             background: var(--surface);
@@ -89,6 +98,29 @@
             background: var(--accent);
             color: #fff;
             border-color: var(--accent);
+        }
+
+        /* Wake Lock Button (タブ内に配置) */
+        .wakelock-btn {
+            background: var(--surface);
+            color: var(--text);
+            border: 1px dashed var(--border);
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s ease;
+            margin-left: auto; /* 右端へ寄せる */
+        }
+        .wakelock-btn:hover { background: var(--input-bg); }
+        .wakelock-btn.active {
+            background: var(--wl-active-bg);
+            color: var(--wl-active-text);
+            border: 1px solid var(--wl-active-border);
+            font-weight: bold;
         }
 
         /* Tab Content */
@@ -199,6 +231,7 @@
 <body>
 
 <div class="container">
+
     <div class="tabs">
         <button class="tab-btn active" data-target="tab-mm-shaku">mm ↔ 尺・間</button>
         <button class="tab-btn" data-target="tab-calc-shaku">長さ加減算</button>
@@ -206,6 +239,10 @@
         <button class="tab-btn" data-target="tab-baton-dist">バトン距離計算(逆算)</button>
         <button class="tab-btn" data-target="tab-baton-speed">バトン速度変換</button>
         <button class="tab-btn" data-target="tab-calculator">シンプル電卓</button>
+        
+        <button id="wakelock-btn" class="wakelock-btn" style="display: none;" title="画面を点灯し続けます">
+            <span id="wl-icon">🌙</span> <span id="wl-text">消灯許可</span>
+        </button>
     </div>
 
     <div id="tab-mm-shaku" class="tab-panel active">
@@ -434,6 +471,77 @@
 </div>
 
 <script>
+// --- 0. 画面消灯禁止 (Screen Wake Lock API) ---
+    (() => {
+        const btn = document.getElementById('wakelock-btn');
+        const iconEl = document.getElementById('wl-icon');
+        const textEl = document.getElementById('wl-text');
+        
+        let wakeLock = null;
+        let isWakeLockRequested = false; 
+
+        if (!('wakeLock' in navigator)) {
+            return;
+        }
+        
+        btn.style.display = 'flex'; 
+
+        const updateUI = (isActive) => {
+            if (isActive) {
+                btn.classList.add('active');
+                iconEl.textContent = '☀️';
+                textEl.textContent = '消灯禁止';
+            } else {
+                btn.classList.remove('active');
+                iconEl.textContent = '🌙';
+                textEl.textContent = '消灯許可';
+            }
+        };
+
+        const requestWakeLock = async () => {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                updateUI(true);
+                
+                wakeLock.addEventListener('release', () => {
+                    wakeLock = null;
+                    if (!isWakeLockRequested) {
+                        updateUI(false);
+                    }
+                });
+            } catch (err) {
+                console.error(`WakeLock Error: ${err.name}, ${err.message}`);
+                isWakeLockRequested = false;
+                updateUI(false);
+                alert(`画面消灯の禁止設定に失敗しました。\n\n【主な原因】\n・HTTPS環境（またはlocalhost）ではない\n・バッテリー節約モードがオンになっている\n\nエラー詳細: ${err.message}`);
+            }
+        };
+
+        const releaseWakeLock = async () => {
+            if (wakeLock !== null) {
+                await wakeLock.release();
+                wakeLock = null;
+                updateUI(false);
+            }
+        };
+
+        btn.addEventListener('click', async () => {
+            if (!isWakeLockRequested) {
+                isWakeLockRequested = true;
+                await requestWakeLock();
+            } else {
+                isWakeLockRequested = false;
+                await releaseWakeLock();
+            }
+        });
+
+        document.addEventListener('visibilitychange', async () => {
+            if (isWakeLockRequested && document.visibilityState === 'visible' && wakeLock === null) {
+                await requestWakeLock();
+            }
+        });
+    })();
+
 // --- タブ切り替え処理 ---
     const tabBtns = document.querySelectorAll('.tab-btn');
     const tabPanels = document.querySelectorAll('.tab-panel');
@@ -462,7 +570,8 @@
             localStorage.setItem('st_activeTab', btn.dataset.target);
         });
     });
-    // --- 1. mm ↔ 尺・間 変換ツール ロジック ---
+    
+// --- 1. mm ↔ 尺・間 変換ツール ロジック ---
     (() => {
         const MM_PER_SHAKU = 1000 * (10/33);
         const MM_PER_KEN   = MM_PER_SHAKU * 6;
@@ -546,7 +655,7 @@
         });
     })();
 
-    // --- 2. 長さ加減算ツール ロジック ---
+// --- 2. 長さ加減算ツール ロジック ---
     (() => {
         const SHAKU_TO_MM = 1000 / 3.3;
         const val1 = document.getElementById('calc_val1'), unit1 = document.getElementById('calc_unit1');
@@ -586,7 +695,7 @@
         calculate();
     })();
 
-    // --- 3. バトン動作計算機 ロジック ---
+// --- 3. バトン動作計算機 ロジック ---
     (() => {
         const elStart = document.getElementById('bq_startPos'), elEnd = document.getElementById('bq_endPos');
         const elDist = document.getElementById('bq_distance'), elAcc = document.getElementById('bq_accTime');
@@ -631,7 +740,7 @@
         document.getElementById('bq_btnSpeed').click();
     })();
 
-    // --- 4. バトン距離計算機（逆算版） ロジック ---
+// --- 4. バトン距離計算機（逆算版） ロジック ---
     (() => {
         const speedEl = document.getElementById('bd_speed');
         const accEl = document.getElementById('bd_acc');
@@ -674,7 +783,7 @@
         calculate(); // 初期計算
     })();
 
-    // --- 5. バトン速度変換ツール ロジック ---
+// --- 5. バトン速度変換ツール ロジック ---
     (() => {
         const MAX_SPEED = 1500;
         const percent = document.getElementById('bs_percent'), speed = document.getElementById('bs_speed');
@@ -837,7 +946,7 @@
             else if (key === 'Escape' || key === 'Delete' || key === 'Backspace') clearCalculator();
         });
     })();
-    // --- PWA Service Worker の登録 ---
+// --- PWA Service Worker の登録 ---
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('./sw.js')

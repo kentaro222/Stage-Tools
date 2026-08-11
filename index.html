@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#121212">
-<title>Stage Tools v3.8</title>
+<title>Stage Tools v4.0</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -197,6 +197,9 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
         <div>
           <label for="bt_speed2">2速度</label>
           <div class="input-group"><input id="bt_speed2" type="number" min="1" max="1500" step="1"><span class="unit">mm/s</span></div>
+          <div class="input-group" style="margin-top:6px">
+            <input id="bt_speed2Percent" type="number" min="0.1" max="100" step="0.1"><span class="unit">%</span>
+          </div>
         </div>
       </div>
       <div class="result-box">
@@ -427,11 +430,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
 /* バトン */
 (()=>{
-  const ids=['bt_start','bt_end','bt_distanceInput','bt_acc','bt_dec','bt_baseSpeed','bt_basePercent','bt_totalTime','bt_pos2','bt_speed2','bt_basis','bt_validationMode'];
+  const ids=['bt_start','bt_end','bt_distanceInput','bt_acc','bt_dec','bt_baseSpeed','bt_basePercent','bt_totalTime','bt_pos2','bt_speed2','bt_speed2Percent','bt_basis','bt_validationMode'];
   const defaults={
     bt_start:'300',bt_end:'20300',bt_distanceInput:'3270',
     bt_acc:'2.0',bt_dec:'2.0',bt_baseSpeed:'750',bt_basePercent:'50.0',
-    bt_totalTime:'',bt_pos2:'10000',bt_speed2:'500',
+    bt_totalTime:'',bt_pos2:'10000',bt_speed2:'500',bt_speed2Percent:'33.3',
     bt_basis:'positions',bt_validationMode:'machine'
   };
 
@@ -477,6 +480,25 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     speedSync=false;
   }
 
+  function sync2FromSpeed(){
+    if(speedSync)return; speedSync=true;
+    const v=Math.min(MAX_SPEED,Math.max(0,Number(els.bt_speed2.value)));
+    if(Number.isFinite(v)){
+      els.bt_speed2Percent.value=pctFromSpeed(v).toFixed(1);
+      saveValue('bt_speed2Percent',els.bt_speed2Percent.value);
+    }
+    speedSync=false;
+  }
+  function sync2FromPercent(){
+    if(speedSync)return; speedSync=true;
+    const p=Math.min(100,Math.max(0,Number(els.bt_speed2Percent.value)));
+    if(Number.isFinite(p)){
+      els.bt_speed2.value=speedFromPct(p);
+      saveValue('bt_speed2',els.bt_speed2.value);
+    }
+    speedSync=false;
+  }
+
   // 実機確認済み：距離÷速度は0.1秒単位で切り捨ててから加減速補正を加える
   function machineBaseTime(distance,speed){
     return Math.floor((distance / speed) * 10 + 1e-9) / 10;
@@ -511,6 +533,8 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       saveValue(id,el.value);
       if(id==='bt_baseSpeed') syncBaseFromSpeed();
       if(id==='bt_basePercent') syncBaseFromPercent();
+      if(id==='bt_speed2') sync2FromSpeed();
+      if(id==='bt_speed2Percent') sync2FromPercent();
       updateStatic();
     });
     if(el.tagName==='SELECT'){
@@ -627,19 +651,20 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const tV2Reach=tP2+tTrans;
     const total=tV2Reach+tV2+dec;
 
+    const basicRunTime = tP2;          // 始動加速を含む、開始〜2位置
+    const secondRunTime = total-tP2;     // 2加減＋2速度走行＋停止減速を含む
+
     return {ok:true,total,warnings,rows:[
       ['移動距離',`${fmt(D,1)} mm`],
-      ['始動加速',`${fmt(acc,1)} 秒`],
-      ['基本速度走行',`${fmt(tBase,1)} 秒`],
-      ['2位置到達',`${fmt(tP2,1)} 秒`],
+      ['基本速度',`${Math.round(v1)} mm/s（${pctFromSpeed(v1).toFixed(1)}%）`],
+      ['2位置',`${fmt(p2,0)} mm`],
+      ['2速度',`${Math.round(v2)} mm/s（${pctFromSpeed(v2).toFixed(1)}%）`],
+      ['加速',`${fmt(acc,1)} 秒`],
       ['2加減',`${fmt(tTrans,1)} 秒`],
-      ['2加減距離',`${fmt(dTrans,1)} mm`],
-      ['2速度到達',`${fmt(tV2Reach,1)} 秒`],
-      ['2速度走行',`${fmt(tV2,1)} 秒`],
-      ['停止減速',`${fmt(dec,1)} 秒`],
-      ['基本速度',`${Math.round(v1)} mm/s`],
-      ['基本速度%',`${pctFromSpeed(v1).toFixed(1)}%`],
-      ['2速度',`${Math.round(v2)} mm/s`],
+      ['減速',`${fmt(dec,1)} 秒`],
+      ['総走行時間',`${fmt(total,1)} 秒`],
+      ['基本速度走行時間（始動加速含む）',`${fmt(basicRunTime,1)} 秒`],
+      ['2速度走行時間（2加減・停止減速含む）',`${fmt(secondRunTime,1)} 秒`]
     ]};
   }
 
@@ -705,7 +730,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.getElementById('bt_advanced').classList.remove('active');
     resultTotal.textContent='-';resultGrid.innerHTML='';
     status.className='status ok';status.textContent='入力待ち';
-    updateBasisUI(); syncBaseFromSpeed(); updateStatic();
+    updateBasisUI(); syncBaseFromSpeed(); sync2FromSpeed(); updateStatic();
   });
 
   syncBaseFromSpeed();

@@ -4,7 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#121212">
-<title>Stage Tools</title>
+<title>Stage Tools v3.3</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
 <style>
 :root{
   --bg:#121212;--surface:#1e1e1e;--surface2:#2a2a2a;--text:#e0e0e0;--muted:#9aa0a6;
@@ -763,5 +769,16 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   renderHist();
 })();
 </script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(err => {
+      console.error('Service Worker registration failed:', err);
+    });
+  });
+}
+</script>
+
 </body>
 </html>

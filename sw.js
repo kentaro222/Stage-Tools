@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stage-tools-v2';
+const CACHE_NAME = 'stage-tools-v3';
 const urlsToCache = [
   './',
   './index.html',

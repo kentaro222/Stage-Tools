@@ -1,20 +1,22 @@
 {
   "name": "Stage Tools",
   "short_name": "Stage Tools",
-  "description": "舞台機構のバトン計算や寸法変換ができるツール集",
-  "start_url": "./",
+  "description": "舞台機構向け 尺・mm変換、バトン計算、速度変換、電卓",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#121212",
   "theme_color": "#121212",
+  "orientation": "any",
   "icons": [
     {
-      "src": "ST-icon-192.png",
+      "src": "./icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "ST-icon-512.png",
+      "src": "./icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

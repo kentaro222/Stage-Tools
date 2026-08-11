@@ -1,40 +1,818 @@
-const CACHE_NAME = 'stage-tools-v3.7.2';
-const APP_SHELL = [
-  './',
-  './index.html',
-  './manifest.webmanifest',
-  './icon-192.png',
-  './icon-512.png'
-];
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#121212">
+<title>Stage Tools v3.8</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL))
-  );
-  self.skipWaiting();
+<style>
+:root{
+  --bg:#121212;--surface:#1e1e1e;--surface2:#2a2a2a;--text:#e0e0e0;--muted:#9aa0a6;
+  --border:#333;--accent:#007bff;--accent2:#0056b3;--ok:#81c784;--okbg:#1b3320;
+  --err:#e57373;--errbg:#3b1c1c;--warn:#ffd54f;--warnbg:#332b00;--calc-op:#e65100;--calc-clear:#c62828;
+}
+@media(prefers-color-scheme:light){
+  :root{--bg:#f4f4f9;--surface:#fff;--surface2:#f5f5f5;--text:#333;--muted:#666;--border:#ddd;
+  --ok:#155724;--okbg:#d4edda;--err:#721c24;--errbg:#f8d7da;--warn:#7a5b00;--warnbg:#fff7d6;
+  --calc-op:#ff9800;--calc-clear:#f44336;}
+}
+*{box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:20px;line-height:1.55}
+.container{max-width:760px;margin:0 auto}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.tab-btn,.subtle-btn{background:var(--surface);color:var(--text);border:1px solid var(--border);padding:10px 14px;border-radius:8px;cursor:pointer;font-weight:600}
+.tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tab-panel{display:none;background:var(--surface);padding:24px;border:1px solid var(--border);border-radius:12px}
+.tab-panel.active{display:block}
+h1{font-size:1.45rem;margin:0 0 14px;padding-bottom:8px;border-bottom:2px solid var(--border)}
+h2{font-size:1.05rem;margin:22px 0 8px}
+label{display:block;font-weight:600;font-size:.9rem;margin:10px 0 4px}
+input[type=number],select{width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:16px}
+input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,123,255,.35)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.input-group{display:flex;align-items:center;gap:8px}
+.unit{white-space:nowrap;color:var(--muted);font-size:.85rem}
+.hint,.muted{color:var(--muted);font-size:.82rem}
+.result-box,.card{margin-top:14px;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--surface2)}
+.status{padding:10px 12px;border-radius:8px;margin:12px 0;font-weight:700}
+.status.ok{background:var(--okbg);color:var(--ok)}
+.status.err{background:var(--errbg);color:var(--err)}
+.status.warn{background:var(--warnbg);color:var(--warn)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.action-btn{background:var(--accent);color:white;border:0;padding:10px 12px;border-radius:7px;cursor:pointer;font-weight:700}
+.action-btn:hover{background:var(--accent2)}
+.reset-btn{margin-top:14px;background:transparent;color:var(--muted);border:1px solid var(--border);padding:8px 12px;border-radius:7px;cursor:pointer}
+.switch-row{display:flex;gap:10px;align-items:center;margin:18px 0 8px}
+.switch-row input{width:20px;height:20px}
+.advanced{display:none;border-top:1px solid var(--border);margin-top:10px;padding-top:4px}
+.advanced.active{display:block}
+.result-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
+.result-grid div:nth-child(odd){color:var(--muted)}
+.big-result{font-size:1.7rem;font-weight:800;color:var(--accent)}
+.calc-wrapper{max-width:340px;margin:0 auto;background:var(--surface2);padding:18px;border-radius:12px;border:1px solid var(--border)}
+.calc-display{background:#111;color:#fff;text-align:right;padding:15px;font-size:2rem;border-radius:8px;margin-bottom:8px;overflow-x:auto;white-space:nowrap}
+.calc-sub{min-height:22px;text-align:right;color:var(--muted);font-size:.85rem;margin-bottom:12px}
+.calc-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+.calc-btn{padding:14px 0;font-size:1.1rem;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer}
+.calc-btn.op{background:var(--calc-op);color:#fff;border-color:var(--calc-op)}
+.calc-btn.eq{background:var(--accent);color:#fff;border-color:var(--accent)}
+.calc-btn.clear{background:var(--calc-clear);color:#fff;border-color:var(--calc-clear)}
+.calc-btn.convert{font-size:.95rem;font-weight:800}
+.span-2{grid-column:span 2}
+.history{max-width:340px;margin:16px auto 0}
+.history-item{padding:7px 0;border-bottom:1px dashed var(--border);text-align:right}
+
+.wakelock-btn{
+  background:var(--surface);color:var(--text);border:1px dashed var(--border);
+  padding:8px 12px;border-radius:8px;cursor:pointer;font-size:.8rem;
+  display:none;align-items:center;gap:6px;margin-left:auto
+}
+.wakelock-btn.active{
+  background:var(--warnbg);color:var(--warn);border:1px solid var(--warn);font-weight:700
+}
+
+@media(max-width:560px){
+  body{padding:12px}.tab-panel{padding:16px}.row,.actions,.result-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="tabs">
+    <button class="tab-btn active" data-target="tab-convert">尺・mm変換</button>
+    <button class="tab-btn" data-target="tab-baton">バトン計算</button>
+    <button class="tab-btn" data-target="tab-speed">速度%変換</button>
+    <button class="tab-btn" data-target="tab-calc">電卓</button>
+    <button id="wakelock-btn" class="wakelock-btn" title="画面を点灯し続けます">
+      <span id="wl-icon">🌙</span><span id="wl-text">消灯許可</span>
+    </button>
+  </div>
+
+  <section id="tab-convert" class="tab-panel active">
+    <h1>mm ↔ 尺・間</h1>
+    <p class="muted">1尺 = 10000/33 mm、1間 = 6尺</p>
+    <label for="cv_mm">ミリメートル</label>
+    <div class="input-group"><input id="cv_mm" type="number" inputmode="decimal" min="0"><span class="unit">mm</span></div>
+    <div id="cv_mmOut" class="result-box"></div>
+
+    <div class="row">
+      <div>
+        <label for="cv_shaku">総尺</label>
+        <div class="input-group"><input id="cv_shaku" type="number" inputmode="decimal" min="0"><span class="unit">尺</span></div>
+      </div>
+      <div>
+        <label for="cv_ken">間</label>
+        <div class="input-group"><input id="cv_ken" type="number" inputmode="numeric" min="0" step="1"><span class="unit">間</span></div>
+      </div>
+    </div>
+    <label for="cv_kenShaku">間の下の尺</label>
+    <div class="input-group"><input id="cv_kenShaku" type="number" inputmode="decimal" min="0"><span class="unit">尺</span></div>
+    <div id="cv_jpOut" class="result-box"></div>
+    <button class="reset-btn" id="reset-convert">このタブをリセット</button>
+  </section>
+
+  <section id="tab-baton" class="tab-panel">
+    <h1>バトン動作計算</h1>
+    <div id="baton_status" class="status ok">入力待ち</div>
+
+    <label for="bt_validationMode">判定モード</label>
+    <select id="bt_validationMode">
+      <option value="machine">実機想定（成立しない条件はエラー）</option>
+      <option value="planning">計画用（警告を出して計算を続行）</option>
+    </select>
+    <div class="hint">実機確認済み：最高1500 mm/s、最低加減速時間は速度÷750を0.1秒単位で切り上げ、必要距離は加速距離＋減速距離以上。</div>
+
+    <label for="bt_basis">距離の指定方法</label>
+    <select id="bt_basis">
+      <option value="positions">現在地・目的地から算出</option>
+      <option value="distance">移動距離だけ入力</option>
+    </select>
+
+    <div id="bt_positionsBlock">
+      <div class="row">
+        <div>
+          <label for="bt_start">現在地</label>
+          <div class="input-group"><input id="bt_start" type="number" min="300" max="20300" step="1"><span class="unit">mm</span></div>
+        </div>
+        <div>
+          <label for="bt_end">目的地</label>
+          <div class="input-group"><input id="bt_end" type="number" min="300" max="20300" step="1"><span class="unit">mm</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="bt_distanceBlock" style="display:none">
+      <label for="bt_distanceInput">移動距離</label>
+      <div class="input-group"><input id="bt_distanceInput" type="number" min="0" max="20000" step="1"><span class="unit">mm</span></div>
+      <div class="hint">通常計算用。2位置・2速度を使う場合は現在地・目的地指定に切り替えてください。</div>
+    </div>
+
+    <div class="result-box">
+      計算上の移動距離：<strong><span id="bt_distance">0</span> mm</strong>
+    </div>
+
+    <div class="row">
+      <div>
+        <label for="bt_acc">始動加速</label>
+        <div class="input-group"><input id="bt_acc" type="number" min="0" step="0.1"><span class="unit">秒</span></div>
+      </div>
+      <div>
+        <label for="bt_dec">停止減速</label>
+        <div class="input-group"><input id="bt_dec" type="number" min="0" step="0.1"><span class="unit">秒</span></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label for="bt_baseSpeed">基本速度</label>
+        <div class="input-group"><input id="bt_baseSpeed" type="number" min="1" max="1500" step="1"><span class="unit">mm/s</span></div>
+        <div class="input-group" style="margin-top:6px">
+          <input id="bt_basePercent" type="number" min="0.1" max="100" step="0.1"><span class="unit">%</span>
+        </div>
+        <div class="hint">100% = 1500 mm/s。速度と%は相互変換します。</div>
+      </div>
+      <div>
+        <label for="bt_totalTime">総動作時間</label>
+        <div class="input-group"><input id="bt_totalTime" type="number" min="0" step="0.1"><span class="unit">秒</span></div>
+      </div>
+    </div>
+
+    <div class="switch-row">
+      <input id="bt_use2" type="checkbox">
+      <label for="bt_use2" style="margin:0">途中で速度を変更する（2位置・2速度）</label>
+    </div>
+
+    <div id="bt_advanced" class="advanced">
+      <div class="row">
+        <div>
+          <label for="bt_pos2">2位置</label>
+          <div class="input-group"><input id="bt_pos2" type="number" min="300" max="20300" step="1"><span class="unit">mm</span></div>
+        </div>
+        <div>
+          <label for="bt_speed2">2速度</label>
+          <div class="input-group"><input id="bt_speed2" type="number" min="1" max="1500" step="1"><span class="unit">mm/s</span></div>
+        </div>
+      </div>
+      <div class="result-box">
+        実機表示想定 2加減：<strong><span id="bt_transTime">0.0</span> 秒</strong>
+        <div class="hint">|基本速度 − 2速度| ÷ 1000 を0.1秒単位で切り捨て</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="bt_fromSpeed" class="action-btn">この速度で時間を計算</button>
+      <button id="bt_fromTime" class="action-btn">この時間で基本速度を計算</button>
+    </div>
+
+    <div id="bt_results" class="result-box">
+      <div class="big-result"><span id="bt_resultTotal">-</span> 秒</div>
+      <div id="bt_resultGrid" class="result-grid" style="margin-top:12px"></div>
+    </div>
+    <button class="reset-btn" id="reset-baton">このタブをリセット</button>
+  </section>
+
+  <section id="tab-speed" class="tab-panel">
+    <h1>バトン速度 % ↔ mm/s</h1>
+    <p class="muted">100% = 1500 mm/s</p>
+    <div class="row">
+      <div>
+        <label for="sp_percent">ダイヤル</label>
+        <div class="input-group"><input id="sp_percent" type="number" min="0" max="100" step="0.1"><span class="unit">%</span></div>
+      </div>
+      <div>
+        <label for="sp_speed">速度</label>
+        <div class="input-group"><input id="sp_speed" type="number" min="0" max="1500" step="1"><span class="unit">mm/s</span></div>
+      </div>
+    </div>
+    <div id="sp_out" class="result-box">数値を入力すると自動計算します</div>
+    <button class="reset-btn" id="reset-speed">このタブをリセット</button>
+  </section>
+
+  <section id="tab-calc" class="tab-panel">
+    <h1>電卓</h1>
+    <div class="calc-wrapper">
+      <div id="c_display" class="calc-display">0</div>
+      <div id="c_sub" class="calc-sub">内部計算単位：mm</div>
+      <div id="c_keys" class="calc-keys">
+        <button class="calc-btn clear span-2" data-action="clear">C</button>
+        <button class="calc-btn convert" data-action="shaku">尺→mm</button>
+        <button class="calc-btn convert" data-action="ken">間→mm</button>
+
+        <button class="calc-btn" data-action="digit" data-value="7">7</button>
+        <button class="calc-btn" data-action="digit" data-value="8">8</button>
+        <button class="calc-btn" data-action="digit" data-value="9">9</button>
+        <button class="calc-btn op" data-action="operator" data-value="/">÷</button>
+
+        <button class="calc-btn" data-action="digit" data-value="4">4</button>
+        <button class="calc-btn" data-action="digit" data-value="5">5</button>
+        <button class="calc-btn" data-action="digit" data-value="6">6</button>
+        <button class="calc-btn op" data-action="operator" data-value="*">×</button>
+
+        <button class="calc-btn" data-action="digit" data-value="1">1</button>
+        <button class="calc-btn" data-action="digit" data-value="2">2</button>
+        <button class="calc-btn" data-action="digit" data-value="3">3</button>
+        <button class="calc-btn op" data-action="operator" data-value="-">−</button>
+
+        <button class="calc-btn span-2" data-action="digit" data-value="0">0</button>
+        <button class="calc-btn" data-action="decimal">.</button>
+        <button class="calc-btn op" data-action="operator" data-value="+">＋</button>
+
+        <button class="calc-btn eq span-2" data-action="equal">＝</button>
+        <button class="calc-btn span-2" data-action="showShaku">mm→尺表示</button>
+      </div>
+    </div>
+    <div class="history card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <strong>計算履歴</strong>
+        <button id="c_history_clear" class="subtle-btn" style="padding:6px 10px">消去</button>
+      </div>
+      <div id="c_history"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+
+/* 画面消灯防止 */
+(()=>{
+  const btn=document.getElementById('wakelock-btn');
+  const icon=document.getElementById('wl-icon');
+  const label=document.getElementById('wl-text');
+  let wakeLock=null;
+  let requested=false;
+
+  if(!('wakeLock' in navigator)) return;
+  btn.style.display='flex';
+
+  function updateUI(active){
+    btn.classList.toggle('active',active);
+    icon.textContent=active?'☀️':'🌙';
+    label.textContent=active?'消灯禁止':'消灯許可';
+  }
+
+  async function requestLock(){
+    try{
+      wakeLock=await navigator.wakeLock.request('screen');
+      updateUI(true);
+      wakeLock.addEventListener('release',()=>{
+        wakeLock=null;
+        if(!requested) updateUI(false);
+      });
+    }catch(err){
+      requested=false;
+      updateUI(false);
+      console.error('Wake Lock Error:',err);
+      alert('画面消灯の禁止設定に失敗しました。HTTPS環境や端末の省電力設定を確認してください。');
+    }
+  }
+
+  async function releaseLock(){
+    if(wakeLock){
+      await wakeLock.release();
+      wakeLock=null;
+    }
+    updateUI(false);
+  }
+
+  btn.addEventListener('click',async()=>{
+    requested=!requested;
+    if(requested) await requestLock();
+    else await releaseLock();
+  });
+
+  document.addEventListener('visibilitychange',async()=>{
+    if(requested && document.visibilityState==='visible' && wakeLock===null){
+      await requestLock();
+    }
+  });
+})();
+
+const STORE_PREFIX = 'stageTools_v2_';
+const MM_PER_SHAKU = 10000 / 33;
+const MM_PER_KEN = MM_PER_SHAKU * 6;
+const MAX_SPEED = 1500;
+const MAX_ACCEL = 750; // mm/s²相当。実機確認済み
+const MIN_POS = 300, MAX_POS = 20300;
+
+function saveValue(id, value){ localStorage.setItem(STORE_PREFIX + id, String(value)); }
+function loadValue(id, fallback){
+  const v = localStorage.getItem(STORE_PREFIX + id);
+  return v === null ? fallback : v;
+}
+function clearIds(ids){ ids.forEach(id => localStorage.removeItem(STORE_PREFIX + id)); }
+function fmt(n, d=3){
+  if(!Number.isFinite(n)) return '-';
+  return Number(n.toFixed(d)).toString();
+}
+function round1(n){ return Math.round(n * 10) / 10; }
+
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.target).classList.add('active');
+    saveValue('activeTab', btn.dataset.target);
+  });
 });
+{
+  const saved = loadValue('activeTab','tab-convert');
+  const btn = document.querySelector(`.tab-btn[data-target="${saved}"]`);
+  if(btn) btn.click();
+}
 
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))
-    )
-  );
-  self.clients.claim();
-});
+/* 尺変換 */
+(()=>{
+  const mm=document.getElementById('cv_mm'), sh=document.getElementById('cv_shaku');
+  const ken=document.getElementById('cv_ken'), ks=document.getElementById('cv_kenShaku');
+  const out1=document.getElementById('cv_mmOut'), out2=document.getElementById('cv_jpOut');
+  let lock=false;
 
-self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
+  [mm,sh,ken,ks].forEach(el=>{
+    el.value = loadValue(el.id,'');
+    el.addEventListener('input',()=>saveValue(el.id,el.value));
+  });
 
-  event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
-        return response;
-      })
-      .catch(() =>
-        caches.match(event.request).then(cached => cached || caches.match('./index.html'))
-      )
-  );
-});
+  function parts(totalShaku){
+    const totalBu=Math.round(Math.max(0,totalShaku)*100);
+    const s=Math.floor(totalBu/100), sun=Math.floor((totalBu%100)/10), bu=totalBu%10;
+    const k=Math.floor(s/6);
+    return {s,sun,bu,k,ks:s%6};
+  }
+  function render(vmm){
+    const p=parts(vmm/MM_PER_SHAKU);
+    out1.textContent=`約 ${p.s}尺 ${p.sun}寸 ${p.bu}分 / ${p.k}間 ${p.ks}尺 ${p.sun}寸 ${p.bu}分`;
+    out2.textContent=`${fmt(vmm,2)} mm`;
+  }
+  function fromMM(){
+    if(lock) return; lock=true;
+    const v=Number(mm.value);
+    if(Number.isFinite(v)&&v>=0){
+      const total=v/MM_PER_SHAKU, k=Math.floor(total/6);
+      sh.value=fmt(total,6); ken.value=k; ks.value=fmt(total-k*6,6); render(v);
+    }
+    lock=false;
+  }
+  function fromShaku(){
+    if(lock) return; lock=true;
+    const s=Number(sh.value);
+    if(Number.isFinite(s)&&s>=0){
+      const v=s*MM_PER_SHAKU,k=Math.floor(s/6);
+      mm.value=fmt(v,3);ken.value=k;ks.value=fmt(s-k*6,6);render(v);
+    }
+    lock=false;
+  }
+  function fromKen(){
+    if(lock) return; lock=true;
+    const k=Math.max(0,parseInt(ken.value||0,10)||0), s=Math.max(0,Number(ks.value)||0);
+    const total=k*6+s,v=total*MM_PER_SHAKU;
+    mm.value=fmt(v,3);sh.value=fmt(total,6);render(v);
+    lock=false;
+  }
+  mm.addEventListener('input',fromMM); sh.addEventListener('input',fromShaku);
+  ken.addEventListener('input',fromKen); ks.addEventListener('input',fromKen);
+  if(mm.value!=='') fromMM(); else if(sh.value!=='') fromShaku(); else {out1.textContent='';out2.textContent='';}
+
+  document.getElementById('reset-convert').addEventListener('click',()=>{
+    clearIds(['cv_mm','cv_shaku','cv_ken','cv_kenShaku']);
+    [mm,sh,ken,ks].forEach(el=>el.value=''); out1.textContent='';out2.textContent='';
+  });
+})();
+
+/* バトン */
+(()=>{
+  const ids=['bt_start','bt_end','bt_distanceInput','bt_acc','bt_dec','bt_baseSpeed','bt_basePercent','bt_totalTime','bt_pos2','bt_speed2','bt_basis','bt_validationMode'];
+  const defaults={
+    bt_start:'300',bt_end:'20300',bt_distanceInput:'3270',
+    bt_acc:'2.0',bt_dec:'2.0',bt_baseSpeed:'750',bt_basePercent:'50.0',
+    bt_totalTime:'',bt_pos2:'10000',bt_speed2:'500',
+    bt_basis:'positions',bt_validationMode:'machine'
+  };
+
+  const els = Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
+  ids.forEach(id=>{
+    const el=els[id];
+    el.value=loadValue(id,defaults[id]);
+  });
+
+  const use2=document.getElementById('bt_use2');
+  use2.checked=loadValue('bt_use2','false')==='true';
+
+  const status=document.getElementById('baton_status');
+  const distEl=document.getElementById('bt_distance');
+  const transEl=document.getElementById('bt_transTime');
+  const resultTotal=document.getElementById('bt_resultTotal');
+  const resultGrid=document.getElementById('bt_resultGrid');
+  const posBlock=document.getElementById('bt_positionsBlock');
+  const distBlock=document.getElementById('bt_distanceBlock');
+
+  let speedSync=false;
+
+  function val(id){return Number(document.getElementById(id).value);}
+  function pctFromSpeed(v){ return Math.round((v/MAX_SPEED*100)*10)/10; }
+  function speedFromPct(p){ return Math.round(MAX_SPEED*p/100); }
+
+  function syncBaseFromSpeed(){
+    if(speedSync)return; speedSync=true;
+    const v=Math.min(MAX_SPEED,Math.max(0,Number(els.bt_baseSpeed.value)));
+    if(Number.isFinite(v)){
+      els.bt_basePercent.value=pctFromSpeed(v).toFixed(1);
+      saveValue('bt_basePercent',els.bt_basePercent.value);
+    }
+    speedSync=false;
+  }
+  function syncBaseFromPercent(){
+    if(speedSync)return; speedSync=true;
+    const p=Math.min(100,Math.max(0,Number(els.bt_basePercent.value)));
+    if(Number.isFinite(p)){
+      els.bt_baseSpeed.value=speedFromPct(p);
+      saveValue('bt_baseSpeed',els.bt_baseSpeed.value);
+    }
+    speedSync=false;
+  }
+
+  // 実機確認済み：距離÷速度は0.1秒単位で切り捨ててから加減速補正を加える
+  function machineBaseTime(distance,speed){
+    return Math.floor((distance / speed) * 10 + 1e-9) / 10;
+  }
+
+  function transitionDisplayTime(v1,v2){
+    return Math.floor((Math.abs(v1-v2)/1000)*10 + 1e-9)/10;
+  }
+  function between(p,a,b){ return p>=Math.min(a,b) && p<=Math.max(a,b); }
+
+  function getDistance(){
+    if(els.bt_basis.value==='distance') return val('bt_distanceInput');
+    const s=val('bt_start'),e=val('bt_end');
+    return Number.isFinite(s)&&Number.isFinite(e)?Math.abs(e-s):NaN;
+  }
+
+  function updateBasisUI(){
+    const direct=els.bt_basis.value==='distance';
+    posBlock.style.display=direct?'none':'block';
+    distBlock.style.display=direct?'block':'none';
+
+    if(direct && use2.checked){
+      status.className='status warn';
+      status.textContent='2位置・2速度を使う場合は「現在地・目的地から算出」に切り替えてください';
+    }
+    updateStatic();
+  }
+
+  ids.forEach(id=>{
+    const el=els[id];
+    el.addEventListener('input',()=>{
+      saveValue(id,el.value);
+      if(id==='bt_baseSpeed') syncBaseFromSpeed();
+      if(id==='bt_basePercent') syncBaseFromPercent();
+      updateStatic();
+    });
+    if(el.tagName==='SELECT'){
+      el.addEventListener('change',()=>{
+        saveValue(id,el.value);
+        if(id==='bt_basis') updateBasisUI();
+      });
+    }
+  });
+
+  use2.addEventListener('change',()=>{
+    saveValue('bt_use2',use2.checked);
+    document.getElementById('bt_advanced').classList.toggle('active',use2.checked);
+    if(use2.checked && els.bt_basis.value==='distance'){
+      els.bt_basis.value='positions';
+      saveValue('bt_basis','positions');
+      updateBasisUI();
+    }
+    updateStatic();
+  });
+  document.getElementById('bt_advanced').classList.toggle('active',use2.checked);
+
+  function isMachineMode(){ return els.bt_validationMode.value==='machine'; }
+
+  function failOrWarn(condition,msg,warnings){
+    if(!condition) return null;
+    if(isMachineMode()) return {ok:false,msg};
+    warnings.push(msg);
+    return null;
+  }
+
+  function calculateWithSpeed(v1){
+    const start=val('bt_start'),end=val('bt_end'),acc=val('bt_acc'),dec=val('bt_dec');
+    const D=getDistance();
+    const warnings=[];
+
+    if(![D,acc,dec,v1].every(Number.isFinite)) return {ok:false,msg:'数値を確認してください'};
+    if(D<=0) return {ok:false,msg:'移動距離は0より大きくしてください'};
+
+    let e;
+    if((e=failOrWarn(D>20000,'移動距離が実機範囲（最大20000 mm）を超えています',warnings))) return e;
+    if((e=failOrWarn(v1<=0||v1>MAX_SPEED,'基本速度が実機範囲（1〜1500 mm/s）外です',warnings))) return e;
+    if(acc<0||dec<0) return {ok:false,msg:'加減速時間は0以上にしてください'};
+
+    // 実機確認済み:
+    // 最低加減速時間 = (速度 / 750) を0.1秒単位で切り上げ
+    const minRampTime = Math.ceil((v1 / MAX_ACCEL) * 10 - 1e-9) / 10;
+    if((e=failOrWarn(
+      acc + 1e-9 < minRampTime,
+      `基本速度 ${Math.round(v1)} mm/s には加速 ${minRampTime.toFixed(1)} 秒以上が必要です`,
+      warnings
+    ))) return e;
+    if((e=failOrWarn(
+      dec + 1e-9 < minRampTime,
+      `基本速度 ${Math.round(v1)} mm/s には減速 ${minRampTime.toFixed(1)} 秒以上が必要です`,
+      warnings
+    ))) return e;
+
+    if(els.bt_basis.value==='positions'){
+      if(![start,end].every(Number.isFinite)) return {ok:false,msg:'現在地・目的地を確認してください'};
+      if((e=failOrWarn(start<MIN_POS||start>MAX_POS||end<MIN_POS||end>MAX_POS,'位置が実機範囲（300〜20300 mm）外です',warnings))) return e;
+      if(start===end) return {ok:false,msg:'現在地と目的地が同じです'};
+    }
+
+    if(!use2.checked){
+      const dAcc=v1*acc/2, dDec=v1*dec/2;
+      if((e=failOrWarn(D + 1e-9 < dAcc+dDec,`移動距離が不足しています。必要最低距離は ${fmt(dAcc+dDec,1)} mm です`,warnings))) return e;
+
+      // 実機表示に合わせる：距離÷速度を0.1秒単位で切り捨ててから加減速補正を加える
+      const baseTime = machineBaseTime(D,v1);
+      const rampLoss = (acc+dec)/2;
+      const total = baseTime + rampLoss;
+
+      // 区間内訳は参考値として物理モデルから算出
+      const tConst=(D-dAcc-dDec)/v1;
+
+      return {ok:true,total,warnings,rows:[
+        ['移動距離',`${fmt(D,1)} mm`],
+        ['基本速度',`${Math.round(v1)} mm/s`],
+        ['基本速度%',`${pctFromSpeed(v1).toFixed(1)}%`],
+        ['加速',`${fmt(acc,1)} 秒`],
+        ['減速',`${fmt(dec,1)} 秒`]
+      ]};
+    }
+
+    if(els.bt_basis.value==='distance'){
+      return {ok:false,msg:'2位置・2速度では現在地・目的地指定が必要です'};
+    }
+
+    const p2=val('bt_pos2'),v2=val('bt_speed2');
+    if(!Number.isFinite(p2)||!Number.isFinite(v2)) return {ok:false,msg:'2位置・2速度を確認してください'};
+    if((e=failOrWarn(!between(p2,start,end)||p2===start||p2===end,'2位置が現在地と目的地の間にありません',warnings))) return e;
+    if((e=failOrWarn(v2<=0||v2>MAX_SPEED,'2速度が実機範囲（1〜1500 mm/s）外です',warnings))) return e;
+
+    const minDecTimeV2 = Math.ceil((v2 / MAX_ACCEL) * 10 - 1e-9) / 10;
+    if((e=failOrWarn(
+      dec + 1e-9 < minDecTimeV2,
+      `2速度 ${Math.round(v2)} mm/s からの減速には ${minDecTimeV2.toFixed(1)} 秒以上が必要です`,
+      warnings
+    ))) return e;
+
+    const D1=Math.abs(p2-start), D2=D-D1;
+    const dAcc=v1*acc/2;
+    const tBase=(D1-dAcc)/v1;
+    if((e=failOrWarn(tBase<0,'2位置までに始動加速を完了できません',warnings))) return e;
+
+    const tTrans=transitionDisplayTime(v1,v2);
+    const dTrans=((v1+v2)/2)*tTrans;
+    const dDec=v2*dec/2;
+    const tV2=(D2-dTrans-dDec)/v2;
+    if((e=failOrWarn(tV2<0,'2位置から目的地までの距離が不足しています',warnings))) return e;
+
+    const tP2=acc+tBase;
+    const tV2Reach=tP2+tTrans;
+    const total=tV2Reach+tV2+dec;
+
+    return {ok:true,total,warnings,rows:[
+      ['移動距離',`${fmt(D,1)} mm`],
+      ['始動加速',`${fmt(acc,1)} 秒`],
+      ['基本速度走行',`${fmt(tBase,1)} 秒`],
+      ['2位置到達',`${fmt(tP2,1)} 秒`],
+      ['2加減',`${fmt(tTrans,1)} 秒`],
+      ['2加減距離',`${fmt(dTrans,1)} mm`],
+      ['2速度到達',`${fmt(tV2Reach,1)} 秒`],
+      ['2速度走行',`${fmt(tV2,1)} 秒`],
+      ['停止減速',`${fmt(dec,1)} 秒`],
+      ['基本速度',`${Math.round(v1)} mm/s`],
+      ['基本速度%',`${pctFromSpeed(v1).toFixed(1)}%`],
+      ['2速度',`${Math.round(v2)} mm/s`],
+    ]};
+  }
+
+  function renderResult(r){
+    if(!r.ok){
+      status.className='status err';status.textContent='⚠ '+r.msg;
+      resultTotal.textContent='-'; resultGrid.innerHTML=''; return;
+    }
+    if(r.warnings && r.warnings.length){
+      status.className='status warn';
+      status.textContent='⚠ 計画用: ' + r.warnings.join(' / ');
+    }else{
+      status.className='status ok';
+      status.textContent='計算OK';
+    }
+    resultTotal.textContent=fmt(r.total,1);
+    resultGrid.innerHTML=r.rows.map(([a,b])=>`<div>${a}</div><div><strong>${b}</strong></div>`).join('');
+  }
+
+  function updateStatic(){
+    const D=getDistance();
+    distEl.textContent=Number.isFinite(D)?fmt(D,1):'-';
+    const v1=val('bt_baseSpeed'),v2=val('bt_speed2');
+    transEl.textContent=(Number.isFinite(v1)&&Number.isFinite(v2))?fmt(transitionDisplayTime(v1,v2),1):'-';
+  }
+
+  document.getElementById('bt_fromSpeed').addEventListener('click',()=>{
+    const v1=val('bt_baseSpeed');
+    const r=calculateWithSpeed(v1);
+    renderResult(r);
+    if(r.ok){
+      els.bt_totalTime.value=round1(r.total).toFixed(1);
+      saveValue('bt_totalTime',els.bt_totalTime.value);
+    }
+  });
+
+  document.getElementById('bt_fromTime').addEventListener('click',()=>{
+    const target=val('bt_totalTime');
+    if(!Number.isFinite(target)||target<=0){
+      renderResult({ok:false,msg:'目標時間を入力してください'});return;
+    }
+    let best=null;
+    for(let speed=1;speed<=MAX_SPEED;speed++){
+      const r=calculateWithSpeed(speed);
+      if(!r.ok) continue;
+      const diff=Math.abs(r.total-target);
+      if(best===null||diff<best.diff) best={speed,r,diff};
+    }
+    if(!best){renderResult({ok:false,msg:'この条件では成立する基本速度がありません'});return;}
+    els.bt_baseSpeed.value=best.speed;
+    syncBaseFromSpeed();
+    saveValue('bt_baseSpeed',best.speed);
+    const rr=best.r;
+    rr.rows.push(['目標時間との差',`${best.r.total-target>=0?'+':''}${fmt(best.r.total-target,1)} 秒`]);
+    renderResult(rr);
+    updateStatic();
+  });
+
+  document.getElementById('reset-baton').addEventListener('click',()=>{
+    clearIds([...ids,'bt_use2']);
+    ids.forEach(id=>els[id].value=defaults[id]);
+    use2.checked=false;
+    document.getElementById('bt_advanced').classList.remove('active');
+    resultTotal.textContent='-';resultGrid.innerHTML='';
+    status.className='status ok';status.textContent='入力待ち';
+    updateBasisUI(); syncBaseFromSpeed(); updateStatic();
+  });
+
+  syncBaseFromSpeed();
+ 
+  updateBasisUI();
+  updateStatic();
+})();
+
+/* 速度% */
+(()=>{
+  const p=document.getElementById('sp_percent'),s=document.getElementById('sp_speed'),out=document.getElementById('sp_out');
+  let lock=false;
+  p.value=loadValue('sp_percent',''); s.value=loadValue('sp_speed','');
+  p.addEventListener('input',()=>{
+    if(lock)return;lock=true;saveValue('sp_percent',p.value);
+    if(p.value===''){s.value='';out.textContent='数値を入力すると自動計算します';}
+    else{
+      const pv=Math.min(100,Math.max(0,Number(p.value))),sv=Math.round(MAX_SPEED*pv/100);
+      s.value=sv;saveValue('sp_speed',sv);out.innerHTML=`<strong>${pv.toFixed(1)}%</strong> ＝ ${sv} mm/s`;
+    }lock=false;
+  });
+  s.addEventListener('input',()=>{
+    if(lock)return;lock=true;saveValue('sp_speed',s.value);
+    if(s.value===''){p.value='';out.textContent='数値を入力すると自動計算します';}
+    else{
+      const sv=Math.min(MAX_SPEED,Math.max(0,Number(s.value))),pv=(sv/MAX_SPEED*100).toFixed(1);
+      p.value=pv;saveValue('sp_percent',pv);out.innerHTML=`<strong>${sv} mm/s</strong> ＝ ${pv}%`;
+    }lock=false;
+  });
+  document.getElementById('reset-speed').addEventListener('click',()=>{
+    clearIds(['sp_percent','sp_speed']);p.value='';s.value='';out.textContent='数値を入力すると自動計算します';
+  });
+})();
+
+/* 電卓 */
+(()=>{
+  let displayValue='0',first=null,op=null,waiting=false;
+  const display=document.getElementById('c_display'),sub=document.getElementById('c_sub'),history=document.getElementById('c_history');
+  let hist=[];
+  try{hist=JSON.parse(localStorage.getItem(STORE_PREFIX+'calcHistory'))||[];}catch{hist=[];}
+  function renderHist(){history.innerHTML=hist.map(x=>`<div class="history-item">${x}</div>`).join('');}
+  function saveHist(){localStorage.setItem(STORE_PREFIX+'calcHistory',JSON.stringify(hist.slice(0,30)));}
+  function addHist(t){hist.unshift(t);hist=hist.slice(0,30);saveHist();renderHist();}
+  function update(){display.textContent=displayValue;}
+  function digit(d){if(waiting){displayValue=d;waiting=false;}else displayValue=displayValue==='0'?d:displayValue+d;update();}
+  function decimal(){if(waiting){displayValue='0.';waiting=false;}else if(!displayValue.includes('.'))displayValue+='.';update();}
+  function calc(a,b,o){
+    if(o==='+')return a+b;if(o==='-')return a-b;if(o==='*')return a*b;if(o==='/')return b===0?NaN:a/b;return b;
+  }
+  function operator(next){
+    const v=Number(displayValue);
+    if(op&&waiting){op=next;return;}
+    if(first===null)first=v;
+    else if(op){
+      const r=calc(first,v,op); if(!Number.isFinite(r)){displayValue='Error';first=null;op=null;waiting=true;update();return;}
+      addHist(`${first} ${op==='*'?'×':op==='/'?'÷':op} ${v} = ${fmt(r,10)}`);
+      first=r;displayValue=fmt(r,10);
+    }
+    op=next;waiting=true;update();
+  }
+  function equal(){
+    if(op===null||waiting)return;
+    const v=Number(displayValue),r=calc(first,v,op);
+    if(!Number.isFinite(r)){displayValue='Error';first=null;op=null;waiting=true;update();return;}
+    addHist(`${first} ${op==='*'?'×':op==='/'?'÷':op} ${v} = ${fmt(r,10)}`);
+    displayValue=fmt(r,10);first=null;op=null;waiting=true;update();
+  }
+  function convert(mult,label){
+    const v=Number(displayValue); if(!Number.isFinite(v))return;
+    const r=v*mult; addHist(`${v}${label} → ${fmt(r,6)} mm`);
+    displayValue=fmt(r,10);waiting=false;update();sub.textContent=`${label}をmmへ変換しました`;
+  }
+  function showShaku(){
+    const mm=Number(displayValue);if(!Number.isFinite(mm))return;
+    const total=mm/MM_PER_SHAKU,totalBu=Math.round(Math.max(0,total)*100);
+    const s=Math.floor(totalBu/100),sun=Math.floor((totalBu%100)/10),bu=totalBu%10,k=Math.floor(s/6);
+    sub.textContent=`≈ ${s}尺 ${sun}寸 ${bu}分 / ${k}間 ${s%6}尺 ${sun}寸 ${bu}分`;
+  }
+  function clear(){displayValue='0';first=null;op=null;waiting=false;sub.textContent='内部計算単位：mm';update();}
+  document.getElementById('c_keys').addEventListener('click',e=>{
+    const b=e.target.closest('button');if(!b)return;
+    const a=b.dataset.action,v=b.dataset.value;
+    if(a==='digit')digit(v);else if(a==='decimal')decimal();else if(a==='operator')operator(v);
+    else if(a==='equal')equal();else if(a==='clear')clear();else if(a==='shaku')convert(MM_PER_SHAKU,'尺');
+    else if(a==='ken')convert(MM_PER_KEN,'間');else if(a==='showShaku')showShaku();
+    b.blur();
+  });
+  document.getElementById('c_history_clear').addEventListener('click',()=>{hist=[];localStorage.removeItem(STORE_PREFIX+'calcHistory');renderHist();});
+  document.addEventListener('keydown',e=>{
+    if(!document.getElementById('tab-calc').classList.contains('active'))return;
+    if(/\d/.test(e.key))digit(e.key);else if(['+','-','*','/'].includes(e.key))operator(e.key);
+    else if(e.key==='.' )decimal();else if(e.key==='Enter'||e.key==='='){e.preventDefault();equal();}
+    else if(['Escape','Delete','Backspace'].includes(e.key))clear();
+  });
+  renderHist();
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(err => {
+      console.error('Service Worker registration failed:', err);
+    });
+  });
+}
+</script>
+
+</body>
+</html>

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stage-tools-v3.7';
+const CACHE_NAME = 'stage-tools-v3.7.2';
 const APP_SHELL = [
   './',
   './index.html',

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#121212">
-<title>Stage Tools v3.3</title>
+<title>Stage Tools v3.6</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -120,6 +120,13 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
   <section id="tab-baton" class="tab-panel">
     <h1>バトン動作計算</h1>
     <div id="baton_status" class="status ok">入力待ち</div>
+
+    <label for="bt_validationMode">判定モード</label>
+    <select id="bt_validationMode">
+      <option value="machine">実機想定（成立しない条件はエラー）</option>
+      <option value="planning">計画用（警告を出して計算を続行）</option>
+    </select>
+    <div class="hint">実機確認済み：最高1500 mm/s、最低加減速時間は速度÷750を0.1秒単位で切り上げ、必要距離は加速距離＋減速距離以上。</div>
 
     <label for="bt_basis">距離の指定方法</label>
     <select id="bt_basis">
@@ -333,6 +340,7 @@ const STORE_PREFIX = 'stageTools_v2_';
 const MM_PER_SHAKU = 10000 / 33;
 const MM_PER_KEN = MM_PER_SHAKU * 6;
 const MAX_SPEED = 1500;
+const MAX_ACCEL = 750; // mm/s²相当。実機確認済み
 const MIN_POS = 300, MAX_POS = 20300;
 
 function saveValue(id, value){ localStorage.setItem(STORE_PREFIX + id, String(value)); }
@@ -422,12 +430,12 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
 /* バトン */
 (()=>{
-  const ids=['bt_start','bt_end','bt_distanceInput','bt_acc','bt_dec','bt_baseSpeed','bt_basePercent','bt_totalTime','bt_pos2','bt_speed2','bt_speed2Percent','bt_basis'];
+  const ids=['bt_start','bt_end','bt_distanceInput','bt_acc','bt_dec','bt_baseSpeed','bt_basePercent','bt_totalTime','bt_pos2','bt_speed2','bt_speed2Percent','bt_basis','bt_validationMode'];
   const defaults={
     bt_start:'300',bt_end:'20300',bt_distanceInput:'3270',
     bt_acc:'2.0',bt_dec:'2.0',bt_baseSpeed:'750',bt_basePercent:'50.0',
     bt_totalTime:'',bt_pos2:'10000',bt_speed2:'500',bt_speed2Percent:'33.3',
-    bt_basis:'positions'
+    bt_basis:'positions',bt_validationMode:'machine'
   };
 
   const els = Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
@@ -543,28 +551,54 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   });
   document.getElementById('bt_advanced').classList.toggle('active',use2.checked);
 
+  function isMachineMode(){ return els.bt_validationMode.value==='machine'; }
+
+  function failOrWarn(condition,msg,warnings){
+    if(!condition) return null;
+    if(isMachineMode()) return {ok:false,msg};
+    warnings.push(msg);
+    return null;
+  }
+
   function calculateWithSpeed(v1){
     const start=val('bt_start'),end=val('bt_end'),acc=val('bt_acc'),dec=val('bt_dec');
     const D=getDistance();
+    const warnings=[];
 
     if(![D,acc,dec,v1].every(Number.isFinite)) return {ok:false,msg:'数値を確認してください'};
     if(D<=0) return {ok:false,msg:'移動距離は0より大きくしてください'};
-    if(D>20000) return {ok:false,msg:'移動距離は最大20000 mmです'};
-    if(v1<=0||v1>MAX_SPEED) return {ok:false,msg:'基本速度は1〜1500 mm/sです'};
+
+    let e;
+    if((e=failOrWarn(D>20000,'移動距離が実機範囲（最大20000 mm）を超えています',warnings))) return e;
+    if((e=failOrWarn(v1<=0||v1>MAX_SPEED,'基本速度が実機範囲（1〜1500 mm/s）外です',warnings))) return e;
     if(acc<0||dec<0) return {ok:false,msg:'加減速時間は0以上にしてください'};
+
+    // 実機確認済み:
+    // 最低加減速時間 = (速度 / 750) を0.1秒単位で切り上げ
+    const minRampTime = Math.ceil((v1 / MAX_ACCEL) * 10 - 1e-9) / 10;
+    if((e=failOrWarn(
+      acc + 1e-9 < minRampTime,
+      `基本速度 ${Math.round(v1)} mm/s には加速 ${minRampTime.toFixed(1)} 秒以上が必要です`,
+      warnings
+    ))) return e;
+    if((e=failOrWarn(
+      dec + 1e-9 < minRampTime,
+      `基本速度 ${Math.round(v1)} mm/s には減速 ${minRampTime.toFixed(1)} 秒以上が必要です`,
+      warnings
+    ))) return e;
 
     if(els.bt_basis.value==='positions'){
       if(![start,end].every(Number.isFinite)) return {ok:false,msg:'現在地・目的地を確認してください'};
-      if(start<MIN_POS||start>MAX_POS||end<MIN_POS||end>MAX_POS) return {ok:false,msg:'位置は300〜20300 mmです'};
+      if((e=failOrWarn(start<MIN_POS||start>MAX_POS||end<MIN_POS||end>MAX_POS,'位置が実機範囲（300〜20300 mm）外です',warnings))) return e;
       if(start===end) return {ok:false,msg:'現在地と目的地が同じです'};
     }
 
     if(!use2.checked){
       const dAcc=v1*acc/2, dDec=v1*dec/2;
-      if(dAcc+dDec>D) return {ok:false,msg:'距離が短く、設定した加減速を完了できません'};
+      if((e=failOrWarn(D + 1e-9 < dAcc+dDec,`移動距離が不足しています。必要最低距離は ${fmt(dAcc+dDec,1)} mm です`,warnings))) return e;
       const tConst=(D-dAcc-dDec)/v1;
       const total=acc+tConst+dec;
-      return {ok:true,total,rows:[
+      return {ok:true,total,warnings,rows:[
         ['移動距離',`${fmt(D,1)} mm`],
         ['始動加速',`${fmt(acc,1)} 秒`],
         ['基本速度走行',`${fmt(tConst,1)} 秒`],
@@ -580,25 +614,32 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
     const p2=val('bt_pos2'),v2=val('bt_speed2');
     if(!Number.isFinite(p2)||!Number.isFinite(v2)) return {ok:false,msg:'2位置・2速度を確認してください'};
-    if(!between(p2,start,end)||p2===start||p2===end) return {ok:false,msg:'2位置は現在地と目的地の間に設定してください'};
-    if(v2<=0||v2>MAX_SPEED) return {ok:false,msg:'2速度は1〜1500 mm/sです'};
+    if((e=failOrWarn(!between(p2,start,end)||p2===start||p2===end,'2位置が現在地と目的地の間にありません',warnings))) return e;
+    if((e=failOrWarn(v2<=0||v2>MAX_SPEED,'2速度が実機範囲（1〜1500 mm/s）外です',warnings))) return e;
+
+    const minDecTimeV2 = Math.ceil((v2 / MAX_ACCEL) * 10 - 1e-9) / 10;
+    if((e=failOrWarn(
+      dec + 1e-9 < minDecTimeV2,
+      `2速度 ${Math.round(v2)} mm/s からの減速には ${minDecTimeV2.toFixed(1)} 秒以上が必要です`,
+      warnings
+    ))) return e;
 
     const D1=Math.abs(p2-start), D2=D-D1;
     const dAcc=v1*acc/2;
     const tBase=(D1-dAcc)/v1;
-    if(tBase<0) return {ok:false,msg:'2位置までに始動加速を完了できません'};
+    if((e=failOrWarn(tBase<0,'2位置までに始動加速を完了できません',warnings))) return e;
 
     const tTrans=transitionDisplayTime(v1,v2);
     const dTrans=((v1+v2)/2)*tTrans;
     const dDec=v2*dec/2;
     const tV2=(D2-dTrans-dDec)/v2;
-    if(tV2<0) return {ok:false,msg:'2位置から目的地までの距離が不足しています'};
+    if((e=failOrWarn(tV2<0,'2位置から目的地までの距離が不足しています',warnings))) return e;
 
     const tP2=acc+tBase;
     const tV2Reach=tP2+tTrans;
     const total=tV2Reach+tV2+dec;
 
-    return {ok:true,total,rows:[
+    return {ok:true,total,warnings,rows:[
       ['移動距離',`${fmt(D,1)} mm`],
       ['始動加速',`${fmt(acc,1)} 秒`],
       ['基本速度走行',`${fmt(tBase,1)} 秒`],
@@ -620,7 +661,13 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       status.className='status err';status.textContent='⚠ '+r.msg;
       resultTotal.textContent='-'; resultGrid.innerHTML=''; return;
     }
-    status.className='status ok';status.textContent='計算OK';
+    if(r.warnings && r.warnings.length){
+      status.className='status warn';
+      status.textContent='⚠ 計画用: ' + r.warnings.join(' / ');
+    }else{
+      status.className='status ok';
+      status.textContent='計算OK';
+    }
     resultTotal.textContent=fmt(r.total,1);
     resultGrid.innerHTML=r.rows.map(([a,b])=>`<div>${a}</div><div><strong>${b}</strong></div>`).join('');
   }

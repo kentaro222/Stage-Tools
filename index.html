@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#121212">
-<title>Stage Tools v3.7</title>
+<title>Stage Tools v3.8</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -589,13 +589,10 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
       return {ok:true,total,warnings,rows:[
         ['移動距離',`${fmt(D,1)} mm`],
-        ['距離÷速度（実機処理）',`${fmt(baseTime,1)} 秒`],
-        ['加減速補正',`${fmt(rampLoss,2)} 秒`],
-        ['始動加速',`${fmt(acc,1)} 秒`],
-        ['基本速度走行（参考）',`${fmt(tConst,1)} 秒`],
-        ['停止減速',`${fmt(dec,1)} 秒`],
         ['基本速度',`${Math.round(v1)} mm/s`],
-        ['基本速度%',`${pctFromSpeed(v1).toFixed(1)}%`]
+        ['基本速度%',`${pctFromSpeed(v1).toFixed(1)}%`],
+        ['加速',`${fmt(acc,1)} 秒`],
+        ['減速',`${fmt(dec,1)} 秒`]
       ]};
     }
 

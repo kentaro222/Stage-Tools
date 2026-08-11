@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#121212">
-<title>Stage Tools v3.6</title>
+<title>Stage Tools v3.7</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -333,6 +333,24 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
     if(requested && document.visibilityState==='visible' && wakeLock===null){
       await requestLock();
     }
+  });
+})();
+
+
+/* 画面向き：PWA/全画面で可能な場合は縦向きを優先 */
+(()=>{
+  async function lockPortrait(){
+    try{
+      if(screen.orientation && screen.orientation.lock){
+        await screen.orientation.lock('portrait');
+      }
+    }catch(e){
+      console.debug('Orientation lock unavailable:', e);
+    }
+  }
+  window.addEventListener('load', lockPortrait);
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible') lockPortrait();
   });
 })();
 

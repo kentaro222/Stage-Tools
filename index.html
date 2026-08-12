@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#121212">
-<title>Stage Tools v4.6</title>
+<title>Stage Tools v4.7</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -245,6 +245,7 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
       実機検証に基づく相互換算。マニュアル運転は速度%に応じて表示加減速時間が変化し、
       キュー設定とは時間の丸め処理も異なります。
     </p>
+    <div class="status ok" style="margin-top:8px">実機想定モード：実機で成立しない設定はエラーになります</div>
 
     <label for="mq_direction">変換方向</label>
     <select id="mq_direction">
@@ -1073,6 +1074,58 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     return Number.isFinite(a)&&Number.isFinite(b)?Math.abs(b-a):NaN;
   }
 
+  function validateMQDistance(){
+    const D=getMQDistance();
+    if(!Number.isFinite(D) || D<=0) return '移動距離を確認してください';
+    if(D>20000) return '移動距離は実機範囲（最大20000 mm）を超えています';
+    if(el.mq_basis.value==='positions'){
+      const a=Number(el.mq_start.value), b=Number(el.mq_end.value);
+      if(!Number.isFinite(a)||!Number.isFinite(b)) return '2地点の数値を確認してください';
+      if(a<MIN_POS||a>MAX_POS||b<MIN_POS||b>MAX_POS) return '地点は実機範囲（300〜20300 mm）で入力してください';
+      if(a===b) return '2地点が同じです';
+    }
+    return null;
+  }
+
+  function validateCueMachine(D,speed,acc,dec){
+    if(![D,speed,acc,dec].every(Number.isFinite)) return 'キュー設定の数値を確認してください';
+    if(speed<=0||speed>MAX_SPEED) return 'キュー基本速度は1〜1500 mm/sで入力してください';
+    if(acc<0||dec<0) return 'キューの加速・減速は0秒以上で入力してください';
+
+    const minRamp=Math.ceil((speed/MAX_ACCEL)*10-1e-9)/10;
+    if(acc+1e-9<minRamp) return `基本速度 ${Math.round(speed)} mm/s には加速 ${minRamp.toFixed(1)} 秒以上が必要です`;
+    if(dec+1e-9<minRamp) return `基本速度 ${Math.round(speed)} mm/s には減速 ${minRamp.toFixed(1)} 秒以上が必要です`;
+
+    const required=speed*acc/2 + speed*dec/2;
+    if(D+1e-9<required) return `移動距離が不足しています。キュー設定では最低 ${fmt(required,1)} mm 必要です`;
+    return null;
+  }
+
+  function validateManualMachine(D,p,accSetting,decSetting){
+    if(![D,p,accSetting,decSetting].every(Number.isFinite)) return 'マニュアル設定の数値を確認してください';
+    if(p<=0||p>100) return '速度ダイヤルは0.1〜100.0%で入力してください';
+    if(accSetting<2.0||accSetting>30.0||decSetting<2.0||decSetting>30.0){
+      return 'マニュアルの加速・減速設定値は2.0〜30.0で入力してください';
+    }
+
+    const speed=manualSpeedFromPercent(p);
+    if(speed<=0) return 'この速度%では実機速度が0 mm/sになるため運転できません';
+
+    const dispAcc=manualDisplayedRamp(accSetting,p);
+    const dispDec=manualDisplayedRamp(decSetting,p);
+    const required=speed*dispAcc/2 + speed*dispDec/2;
+    if(D+1e-9<required){
+      return `移動距離が不足しています。マニュアル運転では最低 ${fmt(required,1)} mm 必要です`;
+    }
+    return null;
+  }
+
+  function failMQ(msg){
+    setStatus('err','⚠ '+msg);
+    resultTitle.textContent='換算できません';
+    resultGrid.innerHTML='';
+  }
+
   function updateUI(){
     const manual=el.mq_direction.value==='manualToCue';
     const direct=el.mq_basis.value==='distance';
@@ -1100,11 +1153,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const ma=Number(el.mq_manualAccSetting.value);
     const md=Number(el.mq_manualDecSetting.value);
 
-    if(![D,p,ma,md].every(Number.isFinite) || D<=0 || p<=0 || p>100 || ma<2.0 || ma>30.0 || md<2.0 || md>30.0){
-      setStatus('err','⚠ マニュアル加減速設定値は2.0〜30.0で入力してください');
-      resultGrid.innerHTML='';
-      return;
-    }
+    const distErr=validateMQDistance();
+    if(distErr){ failMQ(distErr); return; }
+
+    const manualErr=validateManualMachine(D,p,ma,md);
+    if(manualErr){ failMQ(manualErr); return; }
 
     const manualSpeed=manualSpeedFromPercent(p);
     const dispAcc=manualDisplayedRamp(ma,p);
@@ -1116,6 +1169,13 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     // マニュアル画面に実際に表示される加減速秒数をキュー値として採用
     const cueAcc=dispAcc;
     const cueDec=dispDec;
+
+    const cueErr=validateCueMachine(D,cueSpeed,cueAcc,cueDec);
+    if(cueErr){
+      failMQ('このマニュアル設定をキューへ換算すると実機エラーになります：'+cueErr);
+      return;
+    }
+
     const qTime=cueTime(D,cueSpeed,cueAcc,cueDec);
 
     // 相互変換の続きに使えるようキュー入力欄にも反映
@@ -1148,11 +1208,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const qa=Number(el.mq_cueAcc.value);
     const qd=Number(el.mq_cueDec.value);
 
-    if(![D,qs,qa,qd].every(Number.isFinite) || D<=0 || qs<=0 || qs>MAX_SPEED || qa<0 || qd<0){
-      setStatus('err','⚠ 入力値を確認してください');
-      resultGrid.innerHTML='';
-      return;
-    }
+    const distErr=validateMQDistance();
+    if(distErr){ failMQ(distErr); return; }
+
+    const cueErr=validateCueMachine(D,qs,qa,qd);
+    if(cueErr){ failMQ(cueErr); return; }
 
     const qTime=cueTime(D,qs,qa,qd);
 
@@ -1167,6 +1227,22 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const manualSpeed=manualSpeedFromPercent(p);
     const dispAcc=manualDisplayedRamp(ma,p);
     const dispDec=manualDisplayedRamp(md,p);
+
+    const manualErr=validateManualMachine(D,p,ma,md);
+    if(manualErr){
+      failMQ('このキュー設定をマニュアルへ換算すると実機エラーになります：'+manualErr);
+      return;
+    }
+
+    // キューの加減速値を、実機マニュアル表示で再現できるか確認
+    if(Math.abs(dispAcc-qa)>0.051 || Math.abs(dispDec-qd)>0.051){
+      failMQ(
+        `このキューの加減速（${qa.toFixed(1)} / ${qd.toFixed(1)} 秒）は、`+
+        `マニュアル設定範囲2.0〜30.0・最低表示0.5秒の条件では再現できません`
+      );
+      return;
+    }
+
     const mTime=manualTime(D,p,ma,md);
 
     // マニュアル入力欄にも反映

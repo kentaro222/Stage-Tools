@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#121212">
-<title>Stage Tools v4.7</title>
+<title>Stage Tools v4.9</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -292,10 +292,14 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
           </div>
         </div>
         <div>
-          <label>実速度</label>
-          <div id="mq_manualSpeedPreview" class="result-box" style="margin-top:0">-</div>
+          <label for="mq_manualSpeed">実速度</label>
+          <div class="input-group">
+            <input id="mq_manualSpeed" type="number" min="1" max="1500" step="1">
+            <span class="unit">mm/s</span>
+          </div>
         </div>
       </div>
+      <div class="hint">速度%と実速度は相互変換します。実速度はマニュアル運転の内部速度（整数mm/s）です。</div>
       <div class="row">
         <div>
           <label for="mq_manualAccSetting">加速設定値</label>
@@ -310,18 +314,10 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
 
     <div id="mq_cueInput" class="card" style="display:none">
       <h2>キュー設定</h2>
-      <div class="row">
-        <div>
-          <label for="mq_cueSpeed">基本速度</label>
-          <div class="input-group">
-            <input id="mq_cueSpeed" type="number" min="1" max="1500" step="1">
-            <span class="unit">mm/s</span>
-          </div>
-        </div>
-        <div>
-          <label>速度換算</label>
-          <div id="mq_cuePercentPreview" class="result-box" style="margin-top:0">-</div>
-        </div>
+      <label for="mq_cueSpeed">基本速度</label>
+      <div class="input-group">
+        <input id="mq_cueSpeed" type="number" min="1" max="1500" step="1">
+        <span class="unit">mm/s</span>
       </div>
       <div class="row">
         <div>
@@ -994,7 +990,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 (()=>{
   const ids=[
     'mq_direction','mq_basis','mq_start','mq_end','mq_distance',
-    'mq_manualPercent','mq_manualAccSetting','mq_manualDecSetting',
+    'mq_manualPercent','mq_manualSpeed','mq_manualAccSetting','mq_manualDecSetting',
     'mq_cueSpeed','mq_cueAcc','mq_cueDec'
   ];
   const defaults={
@@ -1004,6 +1000,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     mq_end:'300',
     mq_distance:'5562',
     mq_manualPercent:'37.5',
+    mq_manualSpeed:'562',
     mq_manualAccSetting:'2.0',
     mq_manualDecSetting:'2.0',
     mq_cueSpeed:'563',
@@ -1017,6 +1014,8 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const ev=el[id].tagName==='SELECT'?'change':'input';
     el[id].addEventListener(ev,()=>{
       saveValue(id,el[id].value);
+      if(id==='mq_manualPercent') syncManualFromPercent();
+      if(id==='mq_manualSpeed') syncManualFromSpeed();
       updateUI();
     });
   });
@@ -1026,11 +1025,55 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   const positionsBlock=document.getElementById('mq_positionsBlock');
   const distanceBlock=document.getElementById('mq_distanceBlock');
   const distancePreview=document.getElementById('mq_distancePreview');
-  const manualSpeedPreview=document.getElementById('mq_manualSpeedPreview');
-  const cuePercentPreview=document.getElementById('mq_cuePercentPreview');
-  const status=document.getElementById('mq_status');
+const status=document.getElementById('mq_status');
   const resultTitle=document.getElementById('mq_resultTitle');
   const resultGrid=document.getElementById('mq_resultGrid');
+  let mqSpeedSync=false;
+
+  function percentForManualSpeed(target){
+    const v=Math.max(1,Math.min(MAX_SPEED,Math.round(target)));
+    // 0.1%刻みの中から、実機内部速度 floor(1500*p/100) が
+    // 指定速度に最も近くなる値を選ぶ
+    let bestP=0.1, bestDiff=Infinity;
+    for(let i=1;i<=1000;i++){
+      const p=i/10;
+      const sv=Math.floor(MAX_SPEED*p/100 + 1e-9);
+      const diff=Math.abs(sv-v);
+      if(diff<bestDiff){
+        bestDiff=diff;
+        bestP=p;
+        if(diff===0) break;
+      }
+    }
+    return bestP;
+  }
+
+  function syncManualFromPercent(){
+    if(mqSpeedSync)return;
+    mqSpeedSync=true;
+    const p=Number(el.mq_manualPercent.value);
+    if(Number.isFinite(p)&&p>0){
+      const v=manualSpeedFromPercent(Math.min(100,p));
+      el.mq_manualSpeed.value=v;
+      saveValue('mq_manualSpeed',v);
+    }
+    mqSpeedSync=false;
+  }
+
+  function syncManualFromSpeed(){
+    if(mqSpeedSync)return;
+    mqSpeedSync=true;
+    const v=Number(el.mq_manualSpeed.value);
+    if(Number.isFinite(v)&&v>0){
+      const p=percentForManualSpeed(v);
+      el.mq_manualPercent.value=p.toFixed(1);
+      saveValue('mq_manualPercent',el.mq_manualPercent.value);
+      const actual=manualSpeedFromPercent(p);
+      el.mq_manualSpeed.value=actual;
+      saveValue('mq_manualSpeed',actual);
+    }
+    mqSpeedSync=false;
+  }
 
   function round1Manual(n){
     return Math.round((n + Number.EPSILON) * 10) / 10;
@@ -1135,16 +1178,6 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     distanceBlock.style.display=direct?'block':'none';
     const D=getMQDistance();
     distancePreview.textContent=Number.isFinite(D)?fmt(D,1):'-';
-
-    const p=Number(el.mq_manualPercent.value);
-    manualSpeedPreview.textContent=Number.isFinite(p) && p>0
-      ? `${fmt(manualSpeedFromPercent(p),1)} mm/s`
-      : '-';
-
-    const qs=Number(el.mq_cueSpeed.value);
-    cuePercentPreview.textContent=Number.isFinite(qs) && qs>0
-      ? `${fmt(qs/MAX_SPEED*100,1)}%`
-      : '-';
   }
 
   function convertManualToCue(){
@@ -1247,9 +1280,10 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
     // マニュアル入力欄にも反映
     el.mq_manualPercent.value=p.toFixed(1);
+    el.mq_manualSpeed.value=manualSpeed;
     el.mq_manualAccSetting.value=ma.toFixed(1);
     el.mq_manualDecSetting.value=md.toFixed(1);
-    ['mq_manualPercent','mq_manualAccSetting','mq_manualDecSetting'].forEach(id=>saveValue(id,el[id].value));
+    ['mq_manualPercent','mq_manualSpeed','mq_manualAccSetting','mq_manualDecSetting'].forEach(id=>saveValue(id,el[id].value));
 
     resultTitle.textContent='▼ マニュアル運転に入力する値';
     renderRows([
@@ -1292,6 +1326,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     updateUI();
   });
 
+  syncManualFromPercent();
   updateUI();
 })();
 

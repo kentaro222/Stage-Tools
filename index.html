@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#121212">
-<title>Stage Tools v4.5</title>
+<title>Stage Tools v4.6</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -761,19 +761,54 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
       const manualPct=manualPctFromCueSpeed(v1);
       const manualSpeed=manualInternalSpeedFromPct(manualPct);
-      const manualAccSetting=manualSettingFromCueRamp(acc,manualPct);
-      const manualDecSetting=manualSettingFromCueRamp(dec,manualPct);
-      const manualAccDisplay=manualRampDisplay(manualAccSetting,manualPct);
-      const manualDecDisplay=manualRampDisplay(manualDecSetting,manualPct);
-      const manualTotal=manualRunTimeFromCue(D,manualPct,manualAccSetting,manualDecSetting);
 
-      return {ok:true,total,warnings,rows:[
+      // マニュアル加減速設定値の理論値（実機入力範囲 2.0〜30.0）
+      const manualFactor=manualPct/100;
+      const rawManualAccSetting=manualFactor>0 ? acc/manualFactor : NaN;
+      const rawManualDecSetting=manualFactor>0 ? dec/manualFactor : NaN;
+
+      const manualRows=[
         ['移動距離',`${fmt(D,1)} mm`],
         ['基本速度',`${Math.round(v1)} mm/s`],
         ['基本速度%',`${pctFromSpeed(v1).toFixed(1)}%`],
         ['加速',`${fmt(acc,1)} 秒`],
         ['減速',`${fmt(dec,1)} 秒`],
-        ['▼ マニュアル運転にする場合',''],
+        ['▼ マニュアル運転にする場合','']
+      ];
+
+      const settingOutOfRange =
+        !Number.isFinite(rawManualAccSetting) || !Number.isFinite(rawManualDecSetting) ||
+        rawManualAccSetting < 2.0 - 1e-9 || rawManualAccSetting > 30.0 + 1e-9 ||
+        rawManualDecSetting < 2.0 - 1e-9 || rawManualDecSetting > 30.0 + 1e-9;
+
+      if(settingOutOfRange){
+        manualRows.push([
+          '換算結果',
+          '実機のマニュアル加減速設定範囲（2.0〜30.0）外になるため、マニュアル運転へ換算できません'
+        ]);
+        return {ok:true,total,warnings,rows:manualRows};
+      }
+
+      const manualAccSetting=manualSettingFromCueRamp(acc,manualPct);
+      const manualDecSetting=manualSettingFromCueRamp(dec,manualPct);
+      const manualAccDisplay=manualRampDisplay(manualAccSetting,manualPct);
+      const manualDecDisplay=manualRampDisplay(manualDecSetting,manualPct);
+
+      // 実機成立条件：加速距離＋減速距離が移動距離以内
+      const manualRequiredDistance=
+        manualSpeed*manualAccDisplay/2 + manualSpeed*manualDecDisplay/2;
+
+      if(D + 1e-9 < manualRequiredDistance){
+        manualRows.push([
+          '換算結果',
+          `マニュアル運転では必要距離 ${fmt(manualRequiredDistance,1)} mm に対して移動距離が不足するため、実機エラーとなり換算できません`
+        ]);
+        return {ok:true,total,warnings,rows:manualRows};
+      }
+
+      const manualTotal=manualRunTimeFromCue(D,manualPct,manualAccSetting,manualDecSetting);
+
+      manualRows.push(
         ['速度ダイヤル',`${manualPct.toFixed(1)}%`],
         ['マニュアル内部速度',`${manualSpeed} mm/s`],
         ['加速設定値',`${manualAccSetting.toFixed(1)}`],
@@ -781,7 +816,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
         ['実機表示加速',`${manualAccDisplay.toFixed(1)} 秒`],
         ['実機表示減速',`${manualDecDisplay.toFixed(1)} 秒`],
         ['想定マニュアル運転時間',`${manualTotal.toFixed(1)} 秒`]
-      ]};
+      );
+
+      return {ok:true,total,warnings,rows:manualRows};
     }
 
     if(els.bt_basis.value==='distance'){

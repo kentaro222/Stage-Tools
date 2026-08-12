@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#121212">
-<title>Stage Tools v4.0</title>
+<title>Stage Tools v4.5</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -55,6 +55,7 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
 .result-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
 .result-grid div:nth-child(odd){color:var(--muted)}
 .big-result{font-size:1.7rem;font-weight:800;color:var(--accent)}
+.mq-destination-title{font-size:1.15rem;font-weight:800;color:var(--accent);padding-bottom:8px;border-bottom:1px solid var(--border)}
 .calc-wrapper{max-width:340px;margin:0 auto;background:var(--surface2);padding:18px;border-radius:12px;border:1px solid var(--border)}
 .calc-display{background:#111;color:#fff;text-align:right;padding:15px;font-size:2rem;border-radius:8px;margin-bottom:8px;overflow-x:auto;white-space:nowrap}
 .calc-sub{min-height:22px;text-align:right;color:var(--muted);font-size:.85rem;margin-bottom:12px}
@@ -87,7 +88,8 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
   <div class="tabs">
     <button class="tab-btn active" data-target="tab-convert">尺・mm変換</button>
     <button class="tab-btn" data-target="tab-baton">バトン計算</button>
-    <button class="tab-btn" data-target="tab-speed">速度%変換</button>
+    <button class="tab-btn" data-target="tab-simple-speed">速度%変換</button>
+    <button class="tab-btn" data-target="tab-speed">マニュアル↔キュー</button>
     <button class="tab-btn" data-target="tab-calc">電卓</button>
     <button id="wakelock-btn" class="wakelock-btn" title="画面を点灯し続けます">
       <span id="wl-icon">🌙</span><span id="wl-text">消灯許可</span>
@@ -220,7 +222,7 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
     <button class="reset-btn" id="reset-baton">このタブをリセット</button>
   </section>
 
-  <section id="tab-speed" class="tab-panel">
+  <section id="tab-simple-speed" class="tab-panel">
     <h1>バトン速度 % ↔ mm/s</h1>
     <p class="muted">100% = 1500 mm/s</p>
     <div class="row">
@@ -234,6 +236,128 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
       </div>
     </div>
     <div id="sp_out" class="result-box">数値を入力すると自動計算します</div>
+    <button class="reset-btn" id="reset-simple-speed">このタブをリセット</button>
+  </section>
+
+  <section id="tab-speed" class="tab-panel">
+    <h1>マニュアル運転 ↔ キュー設定</h1>
+    <p class="muted">
+      実機検証に基づく相互換算。マニュアル運転は速度%に応じて表示加減速時間が変化し、
+      キュー設定とは時間の丸め処理も異なります。
+    </p>
+
+    <label for="mq_direction">変換方向</label>
+    <select id="mq_direction">
+      <option value="manualToCue">マニュアル運転 → キュー設定</option>
+      <option value="cueToManual">キュー設定 → マニュアル運転</option>
+    </select>
+
+    <label for="mq_basis">距離の指定方法</label>
+    <select id="mq_basis">
+      <option value="positions">2地点から算出</option>
+      <option value="distance">移動距離を直接入力</option>
+    </select>
+
+    <div id="mq_positionsBlock">
+      <div class="row">
+        <div>
+          <label for="mq_start">地点1</label>
+          <div class="input-group"><input id="mq_start" type="number" min="300" max="20300" step="1"><span class="unit">mm</span></div>
+        </div>
+        <div>
+          <label for="mq_end">地点2</label>
+          <div class="input-group"><input id="mq_end" type="number" min="300" max="20300" step="1"><span class="unit">mm</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="mq_distanceBlock" style="display:none">
+      <label for="mq_distance">移動距離</label>
+      <div class="input-group"><input id="mq_distance" type="number" min="1" max="20000" step="1"><span class="unit">mm</span></div>
+    </div>
+
+    <div class="result-box">
+      計算上の移動距離：<strong><span id="mq_distancePreview">-</span> mm</strong>
+    </div>
+
+    <div id="mq_manualInput" class="card">
+      <h2>マニュアル運転の設定</h2>
+      <div class="row">
+        <div>
+          <label for="mq_manualPercent">速度ダイヤル</label>
+          <div class="input-group">
+            <input id="mq_manualPercent" type="number" min="0.1" max="100" step="0.1">
+            <span class="unit">%</span>
+          </div>
+        </div>
+        <div>
+          <label>実速度</label>
+          <div id="mq_manualSpeedPreview" class="result-box" style="margin-top:0">-</div>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="mq_manualAccSetting">加速設定値</label>
+          <input id="mq_manualAccSetting" type="number" min="2.0" max="30.0" step="0.1">
+        </div>
+        <div>
+          <label for="mq_manualDecSetting">減速設定値</label>
+          <input id="mq_manualDecSetting" type="number" min="2.0" max="30.0" step="0.1">
+        </div>
+      </div>
+    </div>
+
+    <div id="mq_cueInput" class="card" style="display:none">
+      <h2>キュー設定</h2>
+      <div class="row">
+        <div>
+          <label for="mq_cueSpeed">基本速度</label>
+          <div class="input-group">
+            <input id="mq_cueSpeed" type="number" min="1" max="1500" step="1">
+            <span class="unit">mm/s</span>
+          </div>
+        </div>
+        <div>
+          <label>速度換算</label>
+          <div id="mq_cuePercentPreview" class="result-box" style="margin-top:0">-</div>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="mq_cueAcc">始動加速</label>
+          <div class="input-group">
+            <input id="mq_cueAcc" type="number" min="0" step="0.1">
+            <span class="unit">秒</span>
+          </div>
+        </div>
+        <div>
+          <label for="mq_cueDec">停止減速</label>
+          <div class="input-group">
+            <input id="mq_cueDec" type="number" min="0" step="0.1">
+            <span class="unit">秒</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="mq_convert" class="action-btn">換算する</button>
+      <button id="mq_swap" class="action-btn">逆方向に切り替え</button>
+    </div>
+
+    <div id="mq_status" class="status ok">入力待ち</div>
+
+    <div id="mq_result" class="result-box">
+      <div id="mq_resultTitle" class="mq-destination-title" style="margin-bottom:12px">換算結果</div>
+      <div id="mq_resultGrid" class="result-grid"></div>
+    </div>
+
+    <div class="hint" style="margin-top:12px">
+      マニュアル運転：内部速度は「1500 × %」を整数mm/sで切り捨て。
+      加減速設定値は2.0〜30.0で、表示加減速時間は「設定値 × %」を0.1秒に四捨五入し、最低0.5秒。
+      運転時間の距離÷速度は0.1秒に四捨五入。キュー設定側は距離÷速度を0.1秒単位で切り捨てます。
+    </div>
+
     <button class="reset-btn" id="reset-speed">このタブをリセット</button>
   </section>
 
@@ -461,6 +585,30 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   function pctFromSpeed(v){ return Math.round((v/MAX_SPEED*100)*10)/10; }
   function speedFromPct(p){ return Math.round(MAX_SPEED*p/100); }
 
+  // キュー設定 → マニュアル運転の参考換算
+  function manualPctFromCueSpeed(v){
+    return Math.round((v/MAX_SPEED*100)*10)/10;
+  }
+  function manualInternalSpeedFromPct(p){
+    return Math.floor(MAX_SPEED*p/100 + 1e-9);
+  }
+  function manualRampDisplay(setting,p){
+    return Math.max(0.5, Math.round((setting*p/100 + Number.EPSILON)*10)/10);
+  }
+  function manualSettingFromCueRamp(cueRamp,p){
+    const factor=p/100;
+    if(!(factor>0)) return NaN;
+    return Math.max(2.0,Math.min(30.0,Math.round((cueRamp/factor + Number.EPSILON)*10)/10));
+  }
+  function manualRunTimeFromCue(D,p,accSetting,decSetting){
+    const v=manualInternalSpeedFromPct(p);
+    if(!(v>0)) return NaN;
+    const base=Math.round((D/v + Number.EPSILON)*10)/10;
+    const a=manualRampDisplay(accSetting,p);
+    const d=manualRampDisplay(decSetting,p);
+    return Math.round((base+(a+d)/2 + Number.EPSILON)*10)/10;
+  }
+
   function syncBaseFromSpeed(){
     if(speedSync)return; speedSync=true;
     const v=Math.min(MAX_SPEED,Math.max(0,Number(els.bt_baseSpeed.value)));
@@ -611,12 +759,28 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       // 区間内訳は参考値として物理モデルから算出
       const tConst=(D-dAcc-dDec)/v1;
 
+      const manualPct=manualPctFromCueSpeed(v1);
+      const manualSpeed=manualInternalSpeedFromPct(manualPct);
+      const manualAccSetting=manualSettingFromCueRamp(acc,manualPct);
+      const manualDecSetting=manualSettingFromCueRamp(dec,manualPct);
+      const manualAccDisplay=manualRampDisplay(manualAccSetting,manualPct);
+      const manualDecDisplay=manualRampDisplay(manualDecSetting,manualPct);
+      const manualTotal=manualRunTimeFromCue(D,manualPct,manualAccSetting,manualDecSetting);
+
       return {ok:true,total,warnings,rows:[
         ['移動距離',`${fmt(D,1)} mm`],
         ['基本速度',`${Math.round(v1)} mm/s`],
         ['基本速度%',`${pctFromSpeed(v1).toFixed(1)}%`],
         ['加速',`${fmt(acc,1)} 秒`],
-        ['減速',`${fmt(dec,1)} 秒`]
+        ['減速',`${fmt(dec,1)} 秒`],
+        ['▼ マニュアル運転にする場合',''],
+        ['速度ダイヤル',`${manualPct.toFixed(1)}%`],
+        ['マニュアル内部速度',`${manualSpeed} mm/s`],
+        ['加速設定値',`${manualAccSetting.toFixed(1)}`],
+        ['減速設定値',`${manualDecSetting.toFixed(1)}`],
+        ['実機表示加速',`${manualAccDisplay.toFixed(1)} 秒`],
+        ['実機表示減速',`${manualDecDisplay.toFixed(1)} 秒`],
+        ['想定マニュアル運転時間',`${manualTotal.toFixed(1)} 秒`]
       ]};
     }
 
@@ -739,30 +903,283 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   updateStatic();
 })();
 
-/* 速度% */
+/* 単純な速度% ↔ mm/s */
 (()=>{
-  const p=document.getElementById('sp_percent'),s=document.getElementById('sp_speed'),out=document.getElementById('sp_out');
+  const p=document.getElementById('sp_percent');
+  const s=document.getElementById('sp_speed');
+  const out=document.getElementById('sp_out');
   let lock=false;
-  p.value=loadValue('sp_percent',''); s.value=loadValue('sp_speed','');
+
+  p.value=loadValue('sp_percent','');
+  s.value=loadValue('sp_speed','');
+
   p.addEventListener('input',()=>{
-    if(lock)return;lock=true;saveValue('sp_percent',p.value);
-    if(p.value===''){s.value='';out.textContent='数値を入力すると自動計算します';}
-    else{
-      const pv=Math.min(100,Math.max(0,Number(p.value))),sv=Math.round(MAX_SPEED*pv/100);
-      s.value=sv;saveValue('sp_speed',sv);out.innerHTML=`<strong>${pv.toFixed(1)}%</strong> ＝ ${sv} mm/s`;
-    }lock=false;
+    if(lock)return; lock=true;
+    saveValue('sp_percent',p.value);
+    if(p.value===''){
+      s.value='';
+      out.textContent='数値を入力すると自動計算します';
+    }else{
+      const pv=Math.min(100,Math.max(0,Number(p.value)));
+      const sv=Math.round(MAX_SPEED*pv/100);
+      s.value=sv;
+      saveValue('sp_speed',sv);
+      out.innerHTML=`<strong>${pv.toFixed(1)}%</strong> ＝ ${sv} mm/s`;
+    }
+    lock=false;
   });
+
   s.addEventListener('input',()=>{
-    if(lock)return;lock=true;saveValue('sp_speed',s.value);
-    if(s.value===''){p.value='';out.textContent='数値を入力すると自動計算します';}
-    else{
-      const sv=Math.min(MAX_SPEED,Math.max(0,Number(s.value))),pv=(sv/MAX_SPEED*100).toFixed(1);
-      p.value=pv;saveValue('sp_percent',pv);out.innerHTML=`<strong>${sv} mm/s</strong> ＝ ${pv}%`;
-    }lock=false;
+    if(lock)return; lock=true;
+    saveValue('sp_speed',s.value);
+    if(s.value===''){
+      p.value='';
+      out.textContent='数値を入力すると自動計算します';
+    }else{
+      const sv=Math.min(MAX_SPEED,Math.max(0,Number(s.value)));
+      const pv=(sv/MAX_SPEED*100).toFixed(1);
+      p.value=pv;
+      saveValue('sp_percent',pv);
+      out.innerHTML=`<strong>${sv} mm/s</strong> ＝ ${pv}%`;
+    }
+    lock=false;
   });
+
+  document.getElementById('reset-simple-speed').addEventListener('click',()=>{
+    clearIds(['sp_percent','sp_speed']);
+    p.value=''; s.value='';
+    out.textContent='数値を入力すると自動計算します';
+  });
+})();
+
+/* マニュアル運転 ↔ キュー設定 */
+(()=>{
+  const ids=[
+    'mq_direction','mq_basis','mq_start','mq_end','mq_distance',
+    'mq_manualPercent','mq_manualAccSetting','mq_manualDecSetting',
+    'mq_cueSpeed','mq_cueAcc','mq_cueDec'
+  ];
+  const defaults={
+    mq_direction:'manualToCue',
+    mq_basis:'positions',
+    mq_start:'20300',
+    mq_end:'300',
+    mq_distance:'5562',
+    mq_manualPercent:'37.5',
+    mq_manualAccSetting:'2.0',
+    mq_manualDecSetting:'2.0',
+    mq_cueSpeed:'563',
+    mq_cueAcc:'2.0',
+    mq_cueDec:'2.0'
+  };
+
+  const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
+  ids.forEach(id=>{
+    el[id].value=loadValue(id,defaults[id]);
+    const ev=el[id].tagName==='SELECT'?'change':'input';
+    el[id].addEventListener(ev,()=>{
+      saveValue(id,el[id].value);
+      updateUI();
+    });
+  });
+
+  const manualBlock=document.getElementById('mq_manualInput');
+  const cueBlock=document.getElementById('mq_cueInput');
+  const positionsBlock=document.getElementById('mq_positionsBlock');
+  const distanceBlock=document.getElementById('mq_distanceBlock');
+  const distancePreview=document.getElementById('mq_distancePreview');
+  const manualSpeedPreview=document.getElementById('mq_manualSpeedPreview');
+  const cuePercentPreview=document.getElementById('mq_cuePercentPreview');
+  const status=document.getElementById('mq_status');
+  const resultTitle=document.getElementById('mq_resultTitle');
+  const resultGrid=document.getElementById('mq_resultGrid');
+
+  function round1Manual(n){
+    return Math.round((n + Number.EPSILON) * 10) / 10;
+  }
+  function floor1Cue(n){
+    return Math.floor(n * 10 + 1e-9) / 10;
+  }
+  function manualSpeedFromPercent(p){
+    return Math.floor(MAX_SPEED * p / 100 + 1e-9);
+  }
+  function manualDisplayedRamp(setting,p){
+    return Math.max(0.5, round1Manual(setting * p / 100));
+  }
+  function manualTime(distance,p,accSetting,decSetting){
+    const speed=manualSpeedFromPercent(p);
+    if(!(speed>0)) return NaN;
+    const base=round1Manual(distance/speed);
+    const acc=manualDisplayedRamp(accSetting,p);
+    const dec=manualDisplayedRamp(decSetting,p);
+    return round1Manual(base + (acc+dec)/2);
+  }
+  function cueTime(distance,speed,acc,dec){
+    if(!(speed>0)) return NaN;
+    const base=floor1Cue(distance/speed);
+    return round1Manual(base + (acc+dec)/2);
+  }
+  function nearestTenth(n){
+    return round1Manual(n);
+  }
+  function renderRows(rows){
+    resultGrid.innerHTML=rows.map(([a,b])=>`<div>${a}</div><div><strong>${b}</strong></div>`).join('');
+  }
+  function setStatus(type,msg){
+    status.className='status '+type;
+    status.textContent=msg;
+  }
+
+  function getMQDistance(){
+    if(el.mq_basis.value==='distance') return Number(el.mq_distance.value);
+    const a=Number(el.mq_start.value), b=Number(el.mq_end.value);
+    return Number.isFinite(a)&&Number.isFinite(b)?Math.abs(b-a):NaN;
+  }
+
+  function updateUI(){
+    const manual=el.mq_direction.value==='manualToCue';
+    const direct=el.mq_basis.value==='distance';
+    manualBlock.style.display=manual?'block':'none';
+    cueBlock.style.display=manual?'none':'block';
+    positionsBlock.style.display=direct?'none':'block';
+    distanceBlock.style.display=direct?'block':'none';
+    const D=getMQDistance();
+    distancePreview.textContent=Number.isFinite(D)?fmt(D,1):'-';
+
+    const p=Number(el.mq_manualPercent.value);
+    manualSpeedPreview.textContent=Number.isFinite(p) && p>0
+      ? `${fmt(manualSpeedFromPercent(p),1)} mm/s`
+      : '-';
+
+    const qs=Number(el.mq_cueSpeed.value);
+    cuePercentPreview.textContent=Number.isFinite(qs) && qs>0
+      ? `${fmt(qs/MAX_SPEED*100,1)}%`
+      : '-';
+  }
+
+  function convertManualToCue(){
+    const D=getMQDistance();
+    const p=Number(el.mq_manualPercent.value);
+    const ma=Number(el.mq_manualAccSetting.value);
+    const md=Number(el.mq_manualDecSetting.value);
+
+    if(![D,p,ma,md].every(Number.isFinite) || D<=0 || p<=0 || p>100 || ma<2.0 || ma>30.0 || md<2.0 || md>30.0){
+      setStatus('err','⚠ マニュアル加減速設定値は2.0〜30.0で入力してください');
+      resultGrid.innerHTML='';
+      return;
+    }
+
+    const manualSpeed=manualSpeedFromPercent(p);
+    const dispAcc=manualDisplayedRamp(ma,p);
+    const dispDec=manualDisplayedRamp(md,p);
+    const mTime=manualTime(D,p,ma,md);
+
+    // キュー実機へ入力できる整数mm/sに丸める
+    const cueSpeed=Math.max(1,Math.min(MAX_SPEED,Math.round(manualSpeed)));
+    // マニュアル画面に実際に表示される加減速秒数をキュー値として採用
+    const cueAcc=dispAcc;
+    const cueDec=dispDec;
+    const qTime=cueTime(D,cueSpeed,cueAcc,cueDec);
+
+    // 相互変換の続きに使えるようキュー入力欄にも反映
+    el.mq_cueSpeed.value=cueSpeed;
+    el.mq_cueAcc.value=cueAcc.toFixed(1);
+    el.mq_cueDec.value=cueDec.toFixed(1);
+    ['mq_cueSpeed','mq_cueAcc','mq_cueDec'].forEach(id=>saveValue(id,el[id].value));
+
+    resultTitle.textContent='▼ キューに入力する値';
+    renderRows([
+      ['基本速度',`${cueSpeed} mm/s`],
+      ['始動加速',`${cueAcc.toFixed(1)} 秒`],
+      ['停止減速',`${cueDec.toFixed(1)} 秒`],
+      ['キュー計算時間',`${qTime.toFixed(1)} 秒`],
+      ['― 元のマニュアル設定 ―',''],
+      ['速度ダイヤル',`${p.toFixed(1)}%`],
+      ['内部速度',`${manualSpeed} mm/s`],
+      ['加速設定値',ma.toFixed(1)],
+      ['減速設定値',md.toFixed(1)],
+      ['実機表示加速',`${dispAcc.toFixed(1)} 秒`],
+      ['実機表示減速',`${dispDec.toFixed(1)} 秒`],
+      ['マニュアル運転時間',`${mTime.toFixed(1)} 秒`]
+    ]);
+    setStatus('ok','キュー設定へ換算しました');
+  }
+
+  function convertCueToManual(){
+    const D=getMQDistance();
+    const qs=Number(el.mq_cueSpeed.value);
+    const qa=Number(el.mq_cueAcc.value);
+    const qd=Number(el.mq_cueDec.value);
+
+    if(![D,qs,qa,qd].every(Number.isFinite) || D<=0 || qs<=0 || qs>MAX_SPEED || qa<0 || qd<0){
+      setStatus('err','⚠ 入力値を確認してください');
+      resultGrid.innerHTML='';
+      return;
+    }
+
+    const qTime=cueTime(D,qs,qa,qd);
+
+    // ダイヤルは0.1%刻みなので、入力可能な最寄り値へ丸める
+    const p=Math.max(0.1,Math.min(100,nearestTenth(qs/MAX_SPEED*100)));
+    const factor=p/100;
+
+    // 目標の表示加減速時間になるよう設定値を逆算し、0.1刻みに丸める
+    const ma=Math.max(2.0,Math.min(30.0,nearestTenth(qa/factor)));
+    const md=Math.max(2.0,Math.min(30.0,nearestTenth(qd/factor)));
+
+    const manualSpeed=manualSpeedFromPercent(p);
+    const dispAcc=manualDisplayedRamp(ma,p);
+    const dispDec=manualDisplayedRamp(md,p);
+    const mTime=manualTime(D,p,ma,md);
+
+    // マニュアル入力欄にも反映
+    el.mq_manualPercent.value=p.toFixed(1);
+    el.mq_manualAccSetting.value=ma.toFixed(1);
+    el.mq_manualDecSetting.value=md.toFixed(1);
+    ['mq_manualPercent','mq_manualAccSetting','mq_manualDecSetting'].forEach(id=>saveValue(id,el[id].value));
+
+    resultTitle.textContent='▼ マニュアル運転に入力する値';
+    renderRows([
+      ['速度ダイヤル',`${p.toFixed(1)}%`],
+      ['加速設定値',ma.toFixed(1)],
+      ['減速設定値',md.toFixed(1)],
+      ['実機表示加速',`${dispAcc.toFixed(1)} 秒`],
+      ['実機表示減速',`${dispDec.toFixed(1)} 秒`],
+      ['マニュアル運転時間',`${mTime.toFixed(1)} 秒`],
+      ['― 元のキュー設定 ―',''],
+      ['基本速度',`${Math.round(qs)} mm/s`],
+      ['始動加速',`${qa.toFixed(1)} 秒`],
+      ['停止減速',`${qd.toFixed(1)} 秒`],
+      ['キュー計算時間',`${qTime.toFixed(1)} 秒`]
+    ]);
+    setStatus('ok','マニュアル運転へ換算しました');
+  }
+
+  document.getElementById('mq_convert').addEventListener('click',()=>{
+    if(el.mq_direction.value==='manualToCue') convertManualToCue();
+    else convertCueToManual();
+    updateUI();
+  });
+
+  document.getElementById('mq_swap').addEventListener('click',()=>{
+    el.mq_direction.value=el.mq_direction.value==='manualToCue'?'cueToManual':'manualToCue';
+    saveValue('mq_direction',el.mq_direction.value);
+    resultGrid.innerHTML='';
+    resultTitle.textContent='換算結果';
+    setStatus('ok','入力待ち');
+    updateUI();
+  });
+
   document.getElementById('reset-speed').addEventListener('click',()=>{
-    clearIds(['sp_percent','sp_speed']);p.value='';s.value='';out.textContent='数値を入力すると自動計算します';
+    clearIds(ids);
+    ids.forEach(id=>el[id].value=defaults[id]);
+    resultGrid.innerHTML='';
+    resultTitle.textContent='換算結果';
+    setStatus('ok','入力待ち');
+    updateUI();
   });
+
+  updateUI();
 })();
 
 /* 電卓 */

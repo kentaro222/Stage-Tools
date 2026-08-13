@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#121212">
-<title>Stage Tools v4.9</title>
+<title>Stage Tools v5.1</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -475,6 +475,7 @@ function fmt(n, d=3){
   return Number(n.toFixed(d)).toString();
 }
 function round1(n){ return Math.round(n * 10) / 10; }
+function floorTenthSafe(n){ return Math.floor((n + 1e-9) * 10) / 10; }
 
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click',()=>{
@@ -746,7 +747,18 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
     if(!use2.checked){
       const dAcc=v1*acc/2, dDec=v1*dec/2;
-      if((e=failOrWarn(D + 1e-9 < dAcc+dDec,`移動距離が不足しています。必要最低距離は ${fmt(dAcc+dDec,1)} mm です`,warnings))) return e;
+      if(D + 1e-9 < dAcc+dDec){
+        const minRamp = Math.ceil((v1 / MAX_ACCEL) * 10 - 1e-9) / 10;
+        const minRequired = v1*minRamp;
+        let msg;
+        if(D + 1e-9 >= minRequired){
+          const equalRampLimit=floorTenthSafe(D/v1);
+          msg=`移動距離が不足しています。現在の設定では最低 ${fmt(dAcc+dDec,1)} mm 必要です。加速・減速を同じ値にするなら、各 ${equalRampLimit.toFixed(1)} 秒以下にすると成立します（実機最低は各 ${minRamp.toFixed(1)} 秒）`;
+        }else{
+          msg=`移動距離が不足しています。加速・減速を実機最低の各 ${minRamp.toFixed(1)} 秒にしても最低 ${fmt(minRequired,1)} mm 必要です。加減速調整だけでは解消できないため、速度を下げるか距離を延ばしてください`;
+        }
+        if((e=failOrWarn(true,msg,warnings))) return e;
+      }
 
       // 実機表示に合わせる：距離÷速度を0.1秒単位で切り捨ててから加減速補正を加える
       const baseTime = machineBaseTime(D,v1);
@@ -1136,19 +1148,44 @@ const status=document.getElementById('mq_status');
     if(acc<0||dec<0) return 'キューの加速・減速は0秒以上で入力してください';
 
     const minRamp=Math.ceil((speed/MAX_ACCEL)*10-1e-9)/10;
-    if(acc+1e-9<minRamp) return `基本速度 ${Math.round(speed)} mm/s には加速 ${minRamp.toFixed(1)} 秒以上が必要です`;
-    if(dec+1e-9<minRamp) return `基本速度 ${Math.round(speed)} mm/s には減速 ${minRamp.toFixed(1)} 秒以上が必要です`;
+    const minRequired=speed*minRamp;
+
+    if(acc+1e-9<minRamp){
+      if(D+1e-9>=speed*(minRamp+Math.max(dec,minRamp))/2){
+        return `基本速度 ${Math.round(speed)} mm/s には加速 ${minRamp.toFixed(1)} 秒以上が必要です。加速を ${minRamp.toFixed(1)} 秒以上にすれば成立できます。加速・減速を同じ値にするなら各 ${Math.max(minRamp,floorTenthSafe(D/speed)).toFixed(1)} 秒以下の範囲で調整してください`;
+      }
+      return `基本速度 ${Math.round(speed)} mm/s には加速 ${minRamp.toFixed(1)} 秒以上が必要です。ただし現在の距離では加減速調整だけでは成立しません。速度を下げるか距離を延ばしてください`;
+    }
+
+    if(dec+1e-9<minRamp){
+      if(D+1e-9>=speed*(Math.max(acc,minRamp)+minRamp)/2){
+        return `基本速度 ${Math.round(speed)} mm/s には減速 ${minRamp.toFixed(1)} 秒以上が必要です。減速を ${minRamp.toFixed(1)} 秒以上にすれば成立できます。加速・減速を同じ値にするなら各 ${Math.max(minRamp,floorTenthSafe(D/speed)).toFixed(1)} 秒以下の範囲で調整してください`;
+      }
+      return `基本速度 ${Math.round(speed)} mm/s には減速 ${minRamp.toFixed(1)} 秒以上が必要です。ただし現在の距離では加減速調整だけでは成立しません。速度を下げるか距離を延ばしてください`;
+    }
 
     const required=speed*acc/2 + speed*dec/2;
-    if(D+1e-9<required) return `移動距離が不足しています。キュー設定では最低 ${fmt(required,1)} mm 必要です`;
+    if(D+1e-9<required){
+      if(D+1e-9>=minRequired){
+        const equalRampLimit=floorTenthSafe(D/speed);
+        return `移動距離が不足しています（現在の設定では最低 ${fmt(required,1)} mm 必要）。加速・減速を同じ値にするなら、各 ${equalRampLimit.toFixed(1)} 秒以下にすると成立します。実機最低値は各 ${minRamp.toFixed(1)} 秒です`;
+      }
+      return `移動距離が不足しています。加速・減速を実機最低の各 ${minRamp.toFixed(1)} 秒にしても最低 ${fmt(minRequired,1)} mm 必要なため、加減速調整だけでは解消できません。速度を下げるか距離を延ばしてください`;
+    }
     return null;
   }
 
   function validateManualMachine(D,p,accSetting,decSetting){
     if(![D,p,accSetting,decSetting].every(Number.isFinite)) return 'マニュアル設定の数値を確認してください';
     if(p<=0||p>100) return '速度ダイヤルは0.1〜100.0%で入力してください';
-    if(accSetting<2.0||accSetting>30.0||decSetting<2.0||decSetting>30.0){
-      return 'マニュアルの加速・減速設定値は2.0〜30.0で入力してください';
+
+    if(accSetting<2.0||accSetting>30.0){
+      const fixed=Math.min(30.0,Math.max(2.0,accSetting));
+      return `マニュアルの加速設定値は2.0〜30.0です。加速設定値を ${fixed.toFixed(1)} に調整してください`;
+    }
+    if(decSetting<2.0||decSetting>30.0){
+      const fixed=Math.min(30.0,Math.max(2.0,decSetting));
+      return `マニュアルの減速設定値は2.0〜30.0です。減速設定値を ${fixed.toFixed(1)} に調整してください`;
     }
 
     const speed=manualSpeedFromPercent(p);
@@ -1157,8 +1194,14 @@ const status=document.getElementById('mq_status');
     const dispAcc=manualDisplayedRamp(accSetting,p);
     const dispDec=manualDisplayedRamp(decSetting,p);
     const required=speed*dispAcc/2 + speed*dispDec/2;
+
     if(D+1e-9<required){
-      return `移動距離が不足しています。マニュアル運転では最低 ${fmt(required,1)} mm 必要です`;
+      const minDisp=manualDisplayedRamp(2.0,p);
+      const minRequired=speed*minDisp;
+      if(D+1e-9>=minRequired){
+        return `移動距離が不足しています（現在の設定では最低 ${fmt(required,1)} mm 必要）。加速・減速設定値を短くすれば成立できます。まず両方を2.0にすると必要距離は ${fmt(minRequired,1)} mm です`;
+      }
+      return `移動距離が不足しています。加速・減速設定値を最小の2.0にしても最低 ${fmt(minRequired,1)} mm 必要なため、加減速調整だけでは解消できません。速度%を下げるか距離を延ばしてください`;
     }
     return null;
   }

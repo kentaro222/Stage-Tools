@@ -933,23 +933,25 @@ document.querySelectorAll('[data-open-target]').forEach(btn=>btn.addEventListene
       `2速度 ${Math.round(v2)} mm/s からの減速には ${minDecTimeV2.toFixed(1)} 秒以上が必要です`
     ))) return e;
 
-    const D1=Math.abs(p2-start), D2=D-D1;
+    const D1=Math.abs(p2-start), D2=Math.abs(end-p2);
     const dAcc=v1*acc/2;
     const tBase=(D1-dAcc)/v1;
     if((e=validate(tBase<0,'2位置までに始動加速を完了できません'))) return e;
 
-    const tTrans=transitionDisplayTime(v1,v2);
-    const dTrans=((v1+v2)/2)*tTrans;
+    // 内部は未丸めの切替時間。表示用の切り捨て値を計算に流用しない。
+    const tTransRaw=Math.abs(v1-v2)/1000;
+    const tTransDisplay=floorTenthSafe(tTransRaw);
+    const dTrans=((v1+v2)/2)*tTransRaw;
     const dDec=v2*dec/2;
     const tV2=(D2-dTrans-dDec)/v2;
     if((e=validate(tV2<0,'2位置から目的地までの距離が不足しています'))) return e;
 
     const tP2=acc+tBase;
-    const tV2Reach=tP2+tTrans;
-    const total=tV2Reach+tV2+dec;
+    const totalRaw=tP2+tTransRaw+tV2+dec;
+    const total=floorTenthSafe(totalRaw);
 
     const basicRunTime = tP2;          // 始動加速を含む、開始〜2位置
-    const secondRunTime = total-tP2;     // 2加減＋2速度走行＋停止減速を含む
+    const secondRunTime = tTransRaw+tV2+dec; // 未丸めの区間時間（参考）
 
     return {ok:true,total,warnings,rows:[
       ['移動距離',`${fmt(D,1)} mm`],
@@ -957,9 +959,10 @@ document.querySelectorAll('[data-open-target]').forEach(btn=>btn.addEventListene
       ['2位置',`${fmt(p2,0)} mm`],
       ['2速度',`${Math.round(v2)} mm/s（${pctFromSpeed(v2).toFixed(1)}%）`],
       ['加速',`${fmt(acc,1)} 秒`],
-      ['2加減',`${fmt(tTrans,1)} 秒`],
+      ['2加減',`${fmt(tTransDisplay,1)} 秒`],
       ['減速',`${fmt(dec,1)} 秒`],
       ['総走行時間',`${fmt(total,1)} 秒`],
+      ['未丸めの合計（参考）',`${fmt(totalRaw,5)} 秒`],
       ['基本速度走行時間（始動加速含む）',`${fmt(basicRunTime,1)} 秒`],
       ['2速度走行時間（2加減・停止減速含む）',`${fmt(secondRunTime,1)} 秒`]
     ]};
@@ -1026,6 +1029,12 @@ document.querySelectorAll('[data-open-target]').forEach(btn=>btn.addEventListene
     const shownDelta=best.shown-requestedShown;
     rr.rows.push(['表示上の目標時間との差',`${shownDelta>=0?'+':''}${fmt(shownDelta,1)} 秒`]);
     renderResult(rr);
+    if(best.displayDiff>=1e-9){
+      status.className='status warn';
+      status.textContent=`指定の ${requestedShown.toFixed(1)} 秒に一致する速度はありません。近似値 ${best.shown.toFixed(1)} 秒（${best.speed} mm/s）を採用しました`;
+    }else{
+      status.textContent=`指定の表示タイム ${best.shown.toFixed(1)} 秒に一致する最速の成立速度です`;
+    }
     resultLabel.textContent='基本速度';
     resultUnit.textContent='mm/s';
     resultTotal.textContent=String(best.speed);
